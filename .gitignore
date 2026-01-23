@@ -1,0 +1,50 @@
+# Environment
+.env
+.env.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+ENV/
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Project specific
+downloads/
+temp/
+*.mp4
+*.mp3
+*.wav
+*.part
+nul
+
+# Claude
+.claude/
+
+# Logs
+*.log
+
+# Data files (optional - uncomment if needed)
+# data.csv
+# profiles/
