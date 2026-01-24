@@ -24,7 +24,7 @@ if sys.platform == "win32":
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-KIE_API_KEY = os.getenv("KIE_API_KEY")
+KIE_API_KEY = "08bd3e0cda8f5c950ff4b98d95b80218"
 BASE_URL = "https://api.kie.ai/api/v1/jobs"
 MODEL = "elevenlabs/text-to-dialogue-v3"
 

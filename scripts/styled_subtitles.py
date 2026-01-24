@@ -24,9 +24,13 @@ import sys
 import re
 import json
 import math
+import tempfile
+import shutil
+import subprocess
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Dict
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import numpy as np
 
@@ -461,6 +465,70 @@ def layout_words(words: List[StyledWord], font_path: str) -> List[List[StyledWor
     return pages
 
 
+def render_frame_to_file(args):
+    """Render a single frame to file (for parallel processing)."""
+    frame_idx, t, pages_data, font_path, output_path, bg_color = args
+
+    # Reload fonts in this process
+    fonts = {}
+    for size in range(30, 150, 2):
+        fonts[size] = ImageFont.truetype(font_path, size)
+
+    # Reconstruct pages from serializable data
+    pages = []
+    for page_data in pages_data:
+        page = []
+        for w_data in page_data:
+            word = StyledWord(
+                text=w_data['text'],
+                color=tuple(w_data['color']),
+                size=w_data['size'],
+                style=w_data['style'],
+                start=w_data['start'],
+                end=w_data['end'],
+                x=w_data['x'],
+                y=w_data['y']
+            )
+            page.append(word)
+        pages.append(page)
+
+    # Render subtitle frame (RGBA)
+    subtitle_frame = render_frame(t, pages, fonts)
+
+    # Create background
+    bg = Image.new('RGBA', (WIDTH, HEIGHT), bg_color)
+
+    # Composite subtitle over background
+    subtitle_img = Image.fromarray(subtitle_frame)
+    final = Image.alpha_composite(bg, subtitle_img)
+
+    # Convert to RGB (no alpha) and save as JPEG for speed
+    final_rgb = final.convert('RGB')
+    final_rgb.save(output_path, 'PNG')
+
+    return frame_idx
+
+
+def serialize_pages(pages: List[List['StyledWord']]) -> List[List[dict]]:
+    """Convert pages to serializable format for multiprocessing."""
+    return [
+        [
+            {
+                'text': w.text,
+                'color': list(w.color),
+                'size': w.size,
+                'style': w.style,
+                'start': w.start,
+                'end': w.end,
+                'x': w.x,
+                'y': w.y
+            }
+            for w in page
+        ]
+        for page in pages
+    ]
+
+
 def ease_out_back(t: float) -> float:
     c1 = 1.70158
     c3 = c1 + 1
@@ -610,6 +678,120 @@ def render_frame(t: float, pages: List[List[StyledWord]], fonts: dict, all_words
     return np.array(img)
 
 
+def get_ffmpeg_path():
+    """Get ffmpeg path from imageio_ffmpeg or system."""
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except:
+        return 'ffmpeg'  # Hope it's in PATH
+
+
+def assemble_video_ffmpeg(
+    frames_dir: str,
+    audio_path: str,
+    output_path: str,
+    fps: int = 30,
+    codec: str = 'libx264',
+    crf: int = 23,
+    threads: int = 0,
+    gpu: str = None
+):
+    """Assemble video from frames using ffmpeg directly (much faster than moviepy)."""
+    ffmpeg = get_ffmpeg_path()
+
+    # Build ffmpeg command
+    cmd = [ffmpeg, '-y']  # -y to overwrite
+
+    # Input: image sequence
+    cmd.extend(['-framerate', str(fps)])
+    cmd.extend(['-i', os.path.join(frames_dir, 'frame_%06d.png')])
+
+    # Input: audio
+    cmd.extend(['-i', audio_path])
+
+    # Video codec settings
+    if gpu == 'nvenc':
+        cmd.extend(['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', str(crf), '-b:v', '0'])
+    elif gpu == 'amd':
+        cmd.extend(['-c:v', 'h264_amf', '-quality', 'balanced', '-rc', 'vbr_latency', '-qp_i', str(crf), '-qp_p', str(crf)])
+    elif gpu == 'intel':
+        cmd.extend(['-c:v', 'h264_qsv', '-preset', 'medium', '-global_quality', str(crf)])
+    else:
+        # CPU encoding
+        cmd.extend(['-c:v', 'libx264', '-preset', 'fast', '-crf', str(crf)])
+        if threads > 0:
+            cmd.extend(['-threads', str(threads)])
+
+    # Audio codec
+    cmd.extend(['-c:a', 'aac', '-b:a', '192k'])
+
+    # Pixel format for compatibility
+    cmd.extend(['-pix_fmt', 'yuv420p'])
+
+    # Map streams
+    cmd.extend(['-map', '0:v', '-map', '1:a'])
+
+    # Shortest (stop when shortest input ends)
+    cmd.extend(['-shortest'])
+
+    # Output
+    cmd.append(output_path)
+
+    print(f"Running ffmpeg: {' '.join(cmd[:10])}...")
+
+    # Run ffmpeg
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    if result.returncode != 0:
+        print(f"ffmpeg error: {result.stderr}")
+        raise RuntimeError(f"ffmpeg failed: {result.stderr}")
+
+    return output_path
+
+
+def detect_gpu_encoder():
+    """Auto-detect available GPU encoder."""
+    import subprocess
+    try:
+        # Try NVIDIA first (most common for video work)
+        result = subprocess.run(
+            ['nvidia-smi'], capture_output=True, timeout=5
+        )
+        if result.returncode == 0:
+            return 'h264_nvenc'
+    except:
+        pass
+
+    # Fallback order: AMD, Intel, CPU
+    return 'libx264'
+
+
+def get_gpu_codec(gpu_option: str, threads: int = 0) -> tuple:
+    """Get codec and ffmpeg params for GPU/CPU encoding."""
+    if gpu_option == 'nvenc':
+        return 'h264_nvenc', ['-preset', 'p4', '-rc', 'vbr', '-cq', '23', '-b:v', '0']
+    elif gpu_option == 'amd':
+        return 'h264_amf', ['-quality', 'balanced', '-rc', 'vbr_latency', '-qp_i', '23', '-qp_p', '23']
+    elif gpu_option == 'intel':
+        return 'h264_qsv', ['-preset', 'medium', '-global_quality', '23']
+    elif gpu_option == 'auto':
+        codec = detect_gpu_encoder()
+        if codec == 'h264_nvenc':
+            return 'h264_nvenc', ['-preset', 'p4', '-rc', 'vbr', '-cq', '23', '-b:v', '0']
+        # CPU with threads
+        params = ['-crf', '23', '-preset', 'fast']
+        if threads > 0:
+            params.extend(['-threads', str(threads)])
+        return 'libx264', params
+    else:
+        # CPU encoding with threading
+        params = ['-crf', '23', '-preset', 'fast']
+        if threads > 0:
+            params.extend(['-threads', str(threads)])
+        return 'libx264', params
+
+
 def create_styled_video(
     script_path: str,
     audio_path: str,
@@ -618,7 +800,9 @@ def create_styled_video(
     background_path: str = None,
     backgrounds_dir: str = None,
     darken: float = BG_DARKEN,
-    desaturate: float = BG_DESATURATE
+    desaturate: float = BG_DESATURATE,
+    gpu: str = None,
+    threads: int = 0
 ):
     """Create video with styled subtitles and dynamic backgrounds."""
 
@@ -666,27 +850,84 @@ def create_styled_video(
     duration = audio.duration
     print(f"\nAudio duration: {duration:.1f}s")
 
-    # Create subtitle clip with alpha channel (cached for performance)
-    frame_cache = {}
+    total_frames = int(duration * FPS)
 
-    def get_cached_frame(t):
-        # Round to frame time for caching
-        frame_key = round(t * FPS)
-        if frame_key not in frame_cache:
-            frame_cache[frame_key] = render_frame(t, pages, fonts)
-        return frame_cache[frame_key]
+    # Parallel frame pre-rendering
+    if threads > 1:
+        print(f"\nPre-rendering {total_frames} frames with {threads} workers...")
 
-    def make_subtitle_frame(t):
-        rgba = get_cached_frame(t)
-        return rgba[:, :, :3]  # RGB only
+        # Create temp directory for frames
+        temp_dir = tempfile.mkdtemp(prefix='styled_frames_')
 
-    def make_subtitle_mask(t):
-        rgba = get_cached_frame(t)
-        return rgba[:, :, 3] / 255.0  # Alpha as grayscale 0-1
+        try:
+            # Serialize pages for multiprocessing
+            pages_data = serialize_pages(pages)
 
-    subtitle_clip = VideoClip(make_subtitle_frame, duration=duration).set_fps(FPS)
-    subtitle_mask = VideoClip(make_subtitle_mask, duration=duration, ismask=True).set_fps(FPS)
-    subtitle_clip = subtitle_clip.set_mask(subtitle_mask)
+            # Background color (dark)
+            bg_color = (15, 15, 20, 255)
+
+            # Prepare tasks
+            tasks = []
+            for frame_idx in range(total_frames):
+                t = frame_idx / FPS
+                frame_path = os.path.join(temp_dir, f'frame_{frame_idx:06d}.png')
+                tasks.append((frame_idx, t, pages_data, FONT_PATH, frame_path, bg_color))
+
+            # Render frames in parallel
+            completed = 0
+            with ProcessPoolExecutor(max_workers=threads) as executor:
+                futures = {executor.submit(render_frame_to_file, task): task[0] for task in tasks}
+                for future in as_completed(futures):
+                    completed += 1
+                    if completed % 100 == 0 or completed == total_frames:
+                        print(f"  Rendered {completed}/{total_frames} frames ({100*completed/total_frames:.0f}%)")
+
+            # Use ffmpeg directly for fast assembly
+            print(f"\nAssembling video with ffmpeg...")
+            assemble_video_ffmpeg(
+                frames_dir=temp_dir,
+                audio_path=audio_path,
+                output_path=output_path,
+                fps=FPS,
+                crf=23,
+                threads=threads,
+                gpu=gpu
+            )
+
+            # Cleanup
+            shutil.rmtree(temp_dir)
+            print("Cleaned up temp frames")
+            print(f"Done! {output_path}")
+            return output_path
+
+        except Exception as e:
+            # Cleanup on error
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+            raise e
+
+    else:
+        # Single-threaded (original method)
+        temp_dir = None
+        frame_cache = {}
+
+        def get_cached_frame(t):
+            frame_key = round(t * FPS)
+            if frame_key not in frame_cache:
+                frame_cache[frame_key] = render_frame(t, pages, fonts)
+            return frame_cache[frame_key]
+
+        def make_subtitle_frame(t):
+            rgba = get_cached_frame(t)
+            return rgba[:, :, :3]
+
+        def make_subtitle_mask(t):
+            rgba = get_cached_frame(t)
+            return rgba[:, :, 3] / 255.0
+
+        subtitle_clip = VideoClip(make_subtitle_frame, duration=duration).with_fps(FPS)
+        subtitle_mask = VideoClip(make_subtitle_mask, duration=duration, is_mask=True).with_fps(FPS)
+        subtitle_clip = subtitle_clip.with_mask(subtitle_mask)
 
     # Load background videos
     bg_clips = []
@@ -722,13 +963,13 @@ def create_styled_video(
             try:
                 clip = VideoFileClip(bg_path)
                 # Resize to fit
-                clip = clip.resize((WIDTH, HEIGHT))
+                clip = clip.resized((WIDTH, HEIGHT))
 
-                # Pre-apply darken and desaturate effects using fl_image
+                # Pre-apply darken and desaturate effects
                 def apply_effects(frame, d=darken, ds=desaturate):
                     return process_background_frame(frame, darken=d, desaturate=ds)
 
-                clip = clip.fl_image(apply_effects)
+                clip = clip.image_transform(apply_effects)
                 loaded_bgs.append(clip)
                 print(f"    Processed: {os.path.basename(bg_path)}")
             except Exception as e:
@@ -753,7 +994,7 @@ def create_styled_video(
                 bg_frame_cache[cache_key] = clip.get_frame(clip_t)
             return bg_frame_cache[cache_key]
 
-        bg = VideoClip(make_bg_frame, duration=duration).set_fps(FPS)
+        bg = VideoClip(make_bg_frame, duration=duration).with_fps(FPS)
 
     else:
         # Fallback to solid color
@@ -762,18 +1003,26 @@ def create_styled_video(
 
     # Composite
     final = CompositeVideoClip([bg, subtitle_clip])
-    final = final.set_audio(audio)
+    final = final.with_audio(audio)
 
-    # Export
+    # Export with GPU or CPU encoding
+    codec, ffmpeg_params = get_gpu_codec(gpu, threads)
     print(f"\nRendering: {output_path}")
+    print(f"Encoder: {codec}" + (f" (threads: {threads})" if threads > 0 else ""))
+
     final.write_videofile(
         output_path,
         fps=FPS,
-        codec='libx264',
+        codec=codec,
         audio_codec='aac',
-        ffmpeg_params=['-crf', '23'],
+        ffmpeg_params=ffmpeg_params,
         logger='bar'
     )
+
+    # Cleanup temp directory
+    if threads > 1 and temp_dir and os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
+        print("Cleaned up temp frames")
 
     print(f"Done! {output_path}")
     return output_path
@@ -791,6 +1040,10 @@ def main():
     parser.add_argument("--bg-dir", dest="backgrounds_dir", help="Directory with background videos (uses catalog.json)")
     parser.add_argument("--darken", type=float, default=BG_DARKEN, help=f"Darken factor 0-1 (default: {BG_DARKEN})")
     parser.add_argument("--desaturate", type=float, default=BG_DESATURATE, help=f"Desaturate factor 0-1 (default: {BG_DESATURATE})")
+    parser.add_argument("--gpu", choices=['nvenc', 'amd', 'intel', 'auto'], default=None,
+                        help="Use GPU encoding: nvenc (NVIDIA), amd, intel, or auto-detect")
+    parser.add_argument("--threads", type=int, default=0,
+                        help="CPU threads for encoding (0=auto, default: 0)")
     args = parser.parse_args()
 
     # Defaults
@@ -814,7 +1067,9 @@ def main():
         background_path=args.background,
         backgrounds_dir=args.backgrounds_dir,
         darken=args.darken,
-        desaturate=args.desaturate
+        desaturate=args.desaturate,
+        gpu=args.gpu,
+        threads=args.threads
     )
 
 
