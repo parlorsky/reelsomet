@@ -41,8 +41,23 @@ reelsomet/
 Creates videos with animated word-by-word subtitles.
 
 ```bash
+# Basic usage
 python scripts/styled_subtitles.py script.txt audio.mp3 -o output.mp4
+
+# Fast parallel rendering (recommended)
+python scripts/styled_subtitles.py script.txt audio.mp3 --threads 30 -o output.mp4
+
+# With GPU encoding (NVIDIA)
+python scripts/styled_subtitles.py script.txt audio.mp3 --threads 30 --gpu nvenc -o output.mp4
 ```
+
+**Performance options:**
+- `--threads N` - parallel frame rendering (use CPU cores, e.g. 16-30)
+- `--gpu nvenc` - NVIDIA GPU encoding
+- `--gpu amd` - AMD GPU encoding
+- `--gpu intel` - Intel QuickSync encoding
+
+**Speed:** 60-sec video renders in ~30 seconds with `--threads 30`
 
 **Markup syntax:**
 - `**word**` - accent (110px, white, glow)
@@ -86,7 +101,7 @@ python scripts/video_analyzer.py video.mp4 -o frames -i 2
    ```
 4. Create video:
    ```bash
-   python scripts/styled_subtitles.py input/script.txt downloads/voice.mp3 -o downloads/final.mp4
+   python scripts/styled_subtitles.py input/script.txt downloads/voice.mp3 --threads 30 -o downloads/final.mp4
    ```
 
 ## Environment
