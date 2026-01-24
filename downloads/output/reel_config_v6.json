@@ -1,0 +1,25 @@
+{
+  "hook": {
+    "video": "",
+    "question": "Do you know what actually saves relationships?"
+  },
+  "pivot": {
+    "text": "It's not what you think.",
+    "subtext": "Let me tell you about small gestures."
+  },
+  "content": {
+    "quote": "Love is not about grand gestures. It's about morning coffee made just right. Evening hugs that last. Remembering the little things.",
+    "source": "The Five Love Languages",
+    "background": "downloads/backgrounds/lofi_anime_01.mp4",
+    "highlight_words": ["coffee", "hugs", "little things"]
+  },
+  "cta": {
+    "text": "daily ideas for your relationship",
+    "app": "bloom",
+    "logo": ""
+  },
+  "style": {
+    "music": "downloads/music/beanie_chezile.mp3",
+    "voice": "female"
+  }
+}

@@ -34,24 +34,42 @@ if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 try:
-    from moviepy import VideoFileClip, AudioFileClip, CompositeVideoClip, ColorClip, VideoClip
+    from moviepy import VideoFileClip, AudioFileClip, CompositeVideoClip, ColorClip, VideoClip, concatenate_videoclips
 except ImportError:
-    from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip, ColorClip, VideoClip
+    from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip, ColorClip, VideoClip, concatenate_videoclips
 
 # Paths
-FONT_PATH = r"D:\insta\reelsomet\downloads\fonts\Montserrat-Bold.ttf"
+FONT_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "downloads", "fonts", "Montserrat-Bold.ttf")
 
 # Video settings
 WIDTH = 1080
 HEIGHT = 1920
 FPS = 30
 
-# Text area - centered layout
-TEXT_AREA_X = 60
-TEXT_AREA_Y = 700
-TEXT_AREA_WIDTH = 960
-TEXT_AREA_HEIGHT = 520
+# Instagram Reels Safe Zone margins
+# These areas are covered by Instagram UI (username, likes, comments, etc.)
+SAFE_MARGIN_TOP = 250      # Username bar, audio info
+SAFE_MARGIN_BOTTOM = 320   # Like, comment, share buttons, captions
+SAFE_MARGIN_LEFT = 60      # Left edge
+SAFE_MARGIN_RIGHT = 120    # Right side buttons (like, comment, share, save)
+
+# Text area - calculated from safe margins
+# Vertical position can be adjusted within safe zone
+TEXT_AREA_X = SAFE_MARGIN_LEFT
+TEXT_AREA_Y = 700          # Where subtitles start (within safe zone)
+TEXT_AREA_WIDTH = WIDTH - SAFE_MARGIN_LEFT - SAFE_MARGIN_RIGHT  # 900px
+TEXT_AREA_HEIGHT = (HEIGHT - SAFE_MARGIN_BOTTOM) - TEXT_AREA_Y  # Stop before bottom UI
 CENTER_TEXT = True  # Center text horizontally
+
+# Background effects
+BG_DARKEN = 0.4           # Darken factor (0=black, 1=original)
+BG_DESATURATE = 0.7       # Desaturation (0=original, 1=grayscale)
+BG_TRANSITION_DURATION = 0.3  # Crossfade duration between backgrounds
+
+# Text glow settings (enhanced for visibility)
+GLOW_RADIUS = 15          # Blur radius for glow
+GLOW_INTENSITY = 200      # Alpha for glow (0-255)
+GLOW_SPREAD = 3           # How far glow extends (reduced for speed)
 
 # Default styles - MAXIMUM IMPACT for Reels
 DEFAULT_SIZE = 72
@@ -449,8 +467,49 @@ def ease_out_back(t: float) -> float:
     return 1 + c3 * pow(t - 1, 3) + c1 * pow(t - 1, 2)
 
 
+def load_background_catalog(backgrounds_dir: str) -> List[dict]:
+    """Load background videos from catalog.json."""
+    catalog_path = os.path.join(backgrounds_dir, "catalog.json")
+    if not os.path.exists(catalog_path):
+        return []
+
+    with open(catalog_path, 'r', encoding='utf-8') as f:
+        catalog = json.load(f)
+
+    return catalog.get('videos', [])
+
+
+def process_background_frame(frame: np.ndarray, darken: float = BG_DARKEN, desaturate: float = BG_DESATURATE) -> np.ndarray:
+    """Apply darken and desaturation effects to background frame."""
+    # Convert to float for processing
+    img = frame.astype(np.float32)
+
+    # Desaturate (convert to grayscale and blend)
+    if desaturate > 0:
+        gray = np.dot(img[..., :3], [0.299, 0.587, 0.114])
+        gray = np.stack([gray, gray, gray], axis=-1)
+        img[..., :3] = img[..., :3] * (1 - desaturate) + gray * desaturate
+
+    # Darken
+    img = img * darken
+
+    return img.clip(0, 255).astype(np.uint8)
+
+
+def get_page_times(pages: List[List['StyledWord']]) -> List[Tuple[float, float]]:
+    """Get start and end times for each page."""
+    page_times = []
+    for page in pages:
+        if not page:
+            continue
+        start = min(w.start for w in page)
+        end = max(w.end for w in page)
+        page_times.append((start, end))
+    return page_times
+
+
 def render_frame(t: float, pages: List[List[StyledWord]], fonts: dict, all_words: List[StyledWord] = None) -> np.ndarray:
-    """Render frame at time t."""
+    """Render frame at time t with enhanced glow effect."""
     img = Image.new('RGBA', (WIDTH, HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
@@ -500,7 +559,7 @@ def render_frame(t: float, pages: List[List[StyledWord]], fonts: dict, all_words
 
         visible_words.append(word)
 
-    # First pass: draw glow for accent/highlight/custom words
+    # First pass: draw BRIGHT WHITE GLOW for ALL words (optimized)
     glow_img = Image.new('RGBA', (WIDTH, HEIGHT), (0, 0, 0, 0))
     glow_draw = ImageDraw.Draw(glow_img)
 
@@ -513,16 +572,15 @@ def render_frame(t: float, pages: List[List[StyledWord]], fonts: dict, all_words
         offset_y = int((1 - eased) * 20)
         x, y = int(word.x), int(word.y + offset_y)
 
-        # Draw glow for accent/highlight/custom colored words
-        if word.style in ('accent', 'highlight', 'custom'):
-            glow_alpha = int(100 * eased)
-            glow_color = (*word.color, glow_alpha)
-            for dx in range(-3, 4):
-                for dy in range(-3, 4):
-                    glow_draw.text((x + dx, y + dy), word.text, font=font, fill=glow_color)
+        # Draw WHITE glow - single draw, blur will spread it
+        glow_alpha = int(GLOW_INTENSITY * eased)
+        glow_color = (255, 255, 255, glow_alpha)
 
-    # Apply blur to glow layer
-    glow_img = glow_img.filter(ImageFilter.GaussianBlur(radius=12))
+        # Single text draw (blur will create the glow effect)
+        glow_draw.text((x, y), word.text, font=font, fill=glow_color)
+
+    # Apply strong blur to create glow effect
+    glow_img = glow_img.filter(ImageFilter.GaussianBlur(radius=GLOW_RADIUS))
     img = Image.alpha_composite(img, glow_img)
     draw = ImageDraw.Draw(img)
 
@@ -539,9 +597,12 @@ def render_frame(t: float, pages: List[List[StyledWord]], fonts: dict, all_words
         offset_y = int((1 - eased) * 20)
         x, y = int(word.x), int(word.y + offset_y)
 
-        # Shadow
-        shadow_alpha = int(200 * eased)
-        draw.text((x + 4, y + 4), word.text, font=font, fill=(0, 0, 0, shadow_alpha))
+        # Shadow (stronger for dark backgrounds)
+        shadow_alpha = int(220 * eased)
+        for sx in range(1, 5):
+            for sy in range(1, 5):
+                draw.text((x + sx, y + sy), word.text, font=font, fill=(0, 0, 0, shadow_alpha // 2))
+        draw.text((x + 3, y + 3), word.text, font=font, fill=(0, 0, 0, shadow_alpha))
 
         # Main text
         draw.text((x, y), word.text, font=font, fill=color)
@@ -554,9 +615,12 @@ def create_styled_video(
     audio_path: str,
     timestamps_path: str,
     output_path: str,
-    background_path: str = None
+    background_path: str = None,
+    backgrounds_dir: str = None,
+    darken: float = BG_DARKEN,
+    desaturate: float = BG_DESATURATE
 ):
-    """Create video with styled subtitles."""
+    """Create video with styled subtitles and dynamic backgrounds."""
 
     # Load script
     print(f"Loading script: {script_path}")
@@ -579,6 +643,12 @@ def create_styled_video(
     pages = layout_words(words, FONT_PATH)
     print(f"Layout: {len(pages)} pages")
 
+    # Get page timing for background switching
+    page_times = get_page_times(pages)
+    print(f"\nPage timings:")
+    for i, (start, end) in enumerate(page_times):
+        print(f"  Page {i+1}: {start:.2f}s - {end:.2f}s")
+
     # Preview
     print("\nStyled words preview:")
     for i, w in enumerate(words[:10]):
@@ -596,27 +666,103 @@ def create_styled_video(
     duration = audio.duration
     print(f"\nAudio duration: {duration:.1f}s")
 
-    # Create subtitle clip
-    def make_frame(t):
-        return render_frame(t, pages, fonts)
+    # Create subtitle clip with alpha channel (cached for performance)
+    frame_cache = {}
 
-    subtitle_clip = VideoClip(make_frame, duration=duration).with_fps(FPS)
+    def get_cached_frame(t):
+        # Round to frame time for caching
+        frame_key = round(t * FPS)
+        if frame_key not in frame_cache:
+            frame_cache[frame_key] = render_frame(t, pages, fonts)
+        return frame_cache[frame_key]
 
-    # Background
-    if background_path and os.path.exists(background_path):
-        print(f"Using background: {background_path}")
-        bg = VideoFileClip(background_path)
-        if bg.duration < duration:
-            bg = bg.loop(duration=duration)
-        else:
-            bg = bg.subclipped(0, duration)
-        bg = bg.resized((WIDTH, HEIGHT))
+    def make_subtitle_frame(t):
+        rgba = get_cached_frame(t)
+        return rgba[:, :, :3]  # RGB only
+
+    def make_subtitle_mask(t):
+        rgba = get_cached_frame(t)
+        return rgba[:, :, 3] / 255.0  # Alpha as grayscale 0-1
+
+    subtitle_clip = VideoClip(make_subtitle_frame, duration=duration).set_fps(FPS)
+    subtitle_mask = VideoClip(make_subtitle_mask, duration=duration, ismask=True).set_fps(FPS)
+    subtitle_clip = subtitle_clip.set_mask(subtitle_mask)
+
+    # Load background videos
+    bg_clips = []
+
+    # Check for backgrounds directory with catalog
+    if backgrounds_dir and os.path.exists(backgrounds_dir):
+        catalog = load_background_catalog(backgrounds_dir)
+        if catalog:
+            print(f"\nLoaded {len(catalog)} backgrounds from catalog")
+            for vid in catalog:
+                if os.path.exists(vid['path']):
+                    bg_clips.append(vid['path'])
+                    print(f"  - {vid['filename']}")
+
+    # Or use single background
+    if not bg_clips and background_path and os.path.exists(background_path):
+        bg_clips = [background_path]
+
+    # Create background with page-based switching
+    if bg_clips:
+        print(f"\nCreating dynamic background with {len(bg_clips)} videos...")
+
+        # Function to get current background index based on time
+        def get_bg_index(t):
+            for i, (start, end) in enumerate(page_times):
+                if start <= t < end + 0.5:  # Small buffer
+                    return i % len(bg_clips)
+            return 0
+
+        # Load all background clips with pre-applied effects
+        loaded_bgs = []
+        for bg_path in bg_clips:
+            try:
+                clip = VideoFileClip(bg_path)
+                # Resize to fit
+                clip = clip.resize((WIDTH, HEIGHT))
+
+                # Pre-apply darken and desaturate effects using fl_image
+                def apply_effects(frame, d=darken, ds=desaturate):
+                    return process_background_frame(frame, darken=d, desaturate=ds)
+
+                clip = clip.fl_image(apply_effects)
+                loaded_bgs.append(clip)
+                print(f"    Processed: {os.path.basename(bg_path)}")
+            except Exception as e:
+                print(f"  Warning: Could not load {bg_path}: {e}")
+
+        if not loaded_bgs:
+            loaded_bgs = [ColorClip(size=(WIDTH, HEIGHT), color=(15, 15, 20), duration=1)]
+
+        # Create composite background that switches with pages
+        bg_frame_cache = {}
+
+        def make_bg_frame(t):
+            bg_idx = get_bg_index(t)
+            clip = loaded_bgs[bg_idx % len(loaded_bgs)]
+
+            # Get frame from clip (loop if needed)
+            clip_t = t % clip.duration
+
+            # Cache key
+            cache_key = (bg_idx, round(clip_t * FPS))
+            if cache_key not in bg_frame_cache:
+                bg_frame_cache[cache_key] = clip.get_frame(clip_t)
+            return bg_frame_cache[cache_key]
+
+        bg = VideoClip(make_bg_frame, duration=duration).set_fps(FPS)
+
     else:
+        # Fallback to solid color
+        print("\nUsing solid color background")
         bg = ColorClip(size=(WIDTH, HEIGHT), color=(15, 15, 20), duration=duration)
 
     # Composite
     final = CompositeVideoClip([bg, subtitle_clip])
-    final = final.with_audio(audio)
+    final = final.set_audio(audio)
 
     # Export
     print(f"\nRendering: {output_path}")
@@ -641,7 +787,10 @@ def main():
     parser.add_argument("audio", help="Path to audio file")
     parser.add_argument("timestamps", nargs="?", help="Path to timestamps JSON")
     parser.add_argument("-o", "--output", help="Output video path")
-    parser.add_argument("--bg", dest="background", help="Background video")
+    parser.add_argument("--bg", dest="background", help="Single background video")
+    parser.add_argument("--bg-dir", dest="backgrounds_dir", help="Directory with background videos (uses catalog.json)")
+    parser.add_argument("--darken", type=float, default=BG_DARKEN, help=f"Darken factor 0-1 (default: {BG_DARKEN})")
+    parser.add_argument("--desaturate", type=float, default=BG_DESATURATE, help=f"Desaturate factor 0-1 (default: {BG_DESATURATE})")
     args = parser.parse_args()
 
     # Defaults
@@ -651,12 +800,21 @@ def main():
     if not args.output:
         args.output = str(audio_path.parent / f"{audio_path.stem}_styled.mp4")
 
+    # Default backgrounds directory
+    if not args.backgrounds_dir and not args.background:
+        default_bg_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "downloads", "backgrounds")
+        if os.path.exists(os.path.join(default_bg_dir, "catalog.json")):
+            args.backgrounds_dir = default_bg_dir
+
     create_styled_video(
         script_path=args.script,
         audio_path=args.audio,
         timestamps_path=args.timestamps,
         output_path=args.output,
-        background_path=args.background
+        background_path=args.background,
+        backgrounds_dir=args.backgrounds_dir,
+        darken=args.darken,
+        desaturate=args.desaturate
     )
 
 

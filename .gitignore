@@ -17,6 +17,7 @@ ENV/
 *.egg-info/
 dist/
 build/
+.pytest_cache/
 
 # IDE
 .idea/
@@ -30,21 +31,62 @@ build/
 Thumbs.db
 desktop.ini
 
-# Project specific
-downloads/
-temp/
+# Project specific - media files (everywhere)
 *.mp4
 *.mp3
 *.wav
+*.webm
+*.mkv
+*.avi
+*.mov
 *.part
-nul
+*.jpg
+*.jpeg
+*.png
+*.gif
+
+# Temp folders
+temp/
+
+# MoviePy temp files
+*TEMP_MPY*
+*.ytdl
+
+# Downloads - keep structure, ignore media
+downloads/**/thumbnails/
+downloads/**/frames/
+downloads/**/frames_*/
+downloads/**/*.mp4
+downloads/**/*.mp3
+downloads/**/*.wav
+downloads/**/*.jpg
+downloads/**/*.png
+
+# But keep these in downloads
+!downloads/fonts/
+!downloads/fonts/**
+!downloads/**/catalog.json
+!downloads/**/*.json
+!downloads/**/*.txt
 
 # Claude
 .claude/
 
 # Logs
 *.log
+nul
 
-# Data files (optional - uncomment if needed)
-# data.csv
-# profiles/
+# Data files
+data.csv
+profiles/
+archive/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Screenshots and images (except needed assets)
+Снимок*.png
+Снимок*.jpg
+Screenshot*.png
+Screenshot*.jpg

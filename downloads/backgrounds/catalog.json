@@ -1,0 +1,90 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-01-24T15:39:22.842372",
+  "videos": [
+    {
+      "filename": "262e68f62363d13135b5b9ade6335403.mp4",
+      "path": "/Users/parlorsky/Desktop/reelsomet/downloads/backgrounds/262e68f62363d13135b5b9ade6335403.mp4",
+      "technical": {
+        "duration": 18.229002,
+        "resolution": [576, 1024],
+        "fps": 60,
+        "orientation": "vertical",
+        "codec": "h264",
+        "file_size_mb": 1.7
+      },
+      "visual": {
+        "dominant_colors": ["#faf9e1", "#c0b7a5", "#7d403b"],
+        "brightness": 0.93,
+        "contrast": 0.26,
+        "saturation": 0.12,
+        "motion_speed": "fast"
+      },
+      "tags": {
+        "style": ["anime", "minimal", "abstract"],
+        "mood": ["energetic", "creative"],
+        "elements": ["drawing", "lines", "illustration"],
+        "text_friendly": false,
+        "description": "Anime-style illustration with drawing/sketching motion on light background"
+      },
+      "thumbnail": "thumbnails/262e68f62363d13135b5b9ade6335403.jpg",
+      "analyzed_at": "2026-01-24T15:39:23.438471"
+    },
+    {
+      "filename": "d8833f640b54415b27da1f35a3c247f9_720w.mp4",
+      "path": "/Users/parlorsky/Desktop/reelsomet/downloads/backgrounds/d8833f640b54415b27da1f35a3c247f9_720w.mp4",
+      "technical": {
+        "duration": 10.837007,
+        "resolution": [720, 1280],
+        "fps": 30,
+        "orientation": "vertical",
+        "codec": "h264",
+        "file_size_mb": 1.23
+      },
+      "visual": {
+        "dominant_colors": ["#2c231b", "#644d3c", "#b29a8b"],
+        "brightness": 0.25,
+        "contrast": 0.32,
+        "saturation": 0.37,
+        "motion_speed": "slow"
+      },
+      "tags": {
+        "style": ["cinematic", "fantasy", "vintage"],
+        "mood": ["melancholic", "sad", "mysterious", "calm"],
+        "elements": ["knight", "armor", "flowers", "sunlight", "field"],
+        "text_friendly": true,
+        "description": "Knight in ornate armor lying peacefully in a flower field with soft golden light"
+      },
+      "thumbnail": "thumbnails/d8833f640b54415b27da1f35a3c247f9_720w.jpg",
+      "analyzed_at": "2026-01-24T15:39:24.292395"
+    },
+    {
+      "filename": "fa3458bda307d9d41eae59a9e5821f66_t5.mp4",
+      "path": "/Users/parlorsky/Desktop/reelsomet/downloads/backgrounds/fa3458bda307d9d41eae59a9e5821f66_t5.mp4",
+      "technical": {
+        "duration": 12.144,
+        "resolution": [720, 1280],
+        "fps": 60,
+        "orientation": "vertical",
+        "codec": "hevc",
+        "file_size_mb": 4.16
+      },
+      "visual": {
+        "dominant_colors": ["#668b88", "#45493d", "#c9cfc4"],
+        "brightness": 0.47,
+        "contrast": 0.42,
+        "saturation": 0.35,
+        "motion_speed": "fast"
+      },
+      "tags": {
+        "style": ["anime", "lofi", "nature"],
+        "mood": ["calm", "peaceful", "adventurous", "cozy"],
+        "elements": ["forest", "trees", "sunlight", "characters", "backpack", "rainbow"],
+        "text_friendly": false,
+        "description": "Studio Ghibli-style forest scene with tall trees, sunbeams, and travelers"
+      },
+      "thumbnail": "thumbnails/fa3458bda307d9d41eae59a9e5821f66_t5.jpg",
+      "analyzed_at": "2026-01-24T15:39:26.748315"
+    }
+  ]
+}
