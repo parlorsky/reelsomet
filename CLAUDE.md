@@ -18,6 +18,7 @@ reelsomet/
 │   ├── styled_subtitles.py      # Main subtitle generator
 │   ├── kie_tts.py               # TTS via KIE.ai
 │   ├── audio_to_word_timestamps.py  # Whisper timestamps
+│   ├── background_catalog.py    # Background video cataloger
 │   ├── video_analyzer.py        # Frame extraction
 │   ├── download_from_html.py    # Instagram downloader
 │   ├── instagram_downloader.py  # Core downloader
@@ -27,7 +28,10 @@ reelsomet/
 ├── downloads/         # Output files
 │   ├── fonts/         # Montserrat-Bold.ttf
 │   ├── music/         # Background music
-│   └── backgrounds/   # Background videos
+│   └── backgrounds/   # Background videos + catalog.json
+│       ├── catalog.json    # Video metadata catalog
+│       ├── thumbnails/     # Auto-generated previews
+│       └── frames/         # Extracted frames for analysis
 ├── input/             # Input scripts and URLs
 ├── docs/              # Documentation
 ├── .env               # API keys (not in git)
@@ -87,6 +91,41 @@ python scripts/audio_to_word_timestamps.py audio.mp3 -o timestamps.json
 ```bash
 python scripts/video_analyzer.py video.mp4 -o frames -i 2
 ```
+
+### background_catalog.py - Background Management
+Analyzes video backgrounds for automatic selection.
+
+```bash
+# Scan all backgrounds and create catalog
+python scripts/background_catalog.py scan
+
+# Analyze single video
+python scripts/background_catalog.py analyze video.mp4
+
+# Search by criteria
+python scripts/background_catalog.py search --mood calm --style lofi
+```
+
+**Catalog location:** `downloads/backgrounds/catalog.json`
+
+**Using backgrounds with styled_subtitles:**
+```bash
+# Use background directory with catalog
+python scripts/styled_subtitles.py script.txt audio.mp3 --bg-dir downloads/backgrounds -o output.mp4
+
+# Single background video
+python scripts/styled_subtitles.py script.txt audio.mp3 --bg background.mp4 -o output.mp4
+
+# Adjust background effects
+--darken 0.65       # darken factor (default: 0.65)
+--desaturate 0.25   # desaturate factor (default: 0.25)
+```
+
+**Catalog structure:**
+- `technical`: duration, resolution, fps, codec
+- `visual`: dominant_colors, brightness, contrast, saturation, motion_speed, text_friendly
+- `semantic`: style, mood, elements, color_palette, time_of_day
+- `timeline`: scene descriptions with timestamps
 
 ## Workflow: Create Styled Video
 

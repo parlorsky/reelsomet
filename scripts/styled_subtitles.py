@@ -274,6 +274,12 @@ def parse_styled_text(text: str) -> List[StyledWord]:
     return words
 
 
+def normalize_for_match(text: str) -> str:
+    """Normalize text for matching: lowercase, alphanumeric, ё→е."""
+    text = text.lower().replace('ё', 'е')
+    return ''.join(c for c in text if c.isalnum())
+
+
 def apply_timestamps(words: List[StyledWord], timestamps: List[dict]) -> List[StyledWord]:
     """
     Apply timing from Whisper timestamps to styled words.
@@ -286,11 +292,25 @@ def apply_timestamps(words: List[StyledWord], timestamps: List[dict]) -> List[St
 
     for word in words:
         # Find matching timestamp
-        word_clean = ''.join(c for c in word.text.lower() if c.isalnum())
+        word_clean = normalize_for_match(word.text)
+
+        # Skip punctuation-only words (they clean to empty string)
+        if not word_clean:
+            # Estimate from previous word
+            if words.index(word) > 0:
+                prev = words[words.index(word) - 1]
+                word.start = prev.end
+                word.end = prev.end + 0.1
+            continue
 
         while ts_idx < len(timestamps):
             ts = timestamps[ts_idx]
-            ts_clean = ''.join(c for c in ts['word'].lower() if c.isalnum())
+            ts_clean = normalize_for_match(ts['word'])
+
+            # Skip empty timestamp words
+            if not ts_clean:
+                ts_idx += 1
+                continue
 
             # Check for match (exact or partial)
             if word_clean == ts_clean or word_clean in ts_clean or ts_clean in word_clean:
@@ -467,7 +487,7 @@ def layout_words(words: List[StyledWord], font_path: str) -> List[List[StyledWor
 
 def render_frame_to_file(args):
     """Render a single frame to file (for parallel processing)."""
-    frame_idx, t, pages_data, font_path, output_path, bg_color = args
+    frame_idx, t, pages_data, font_path, output_path, bg_info = args
 
     # Reload fonts in this process
     fonts = {}
@@ -495,14 +515,20 @@ def render_frame_to_file(args):
     # Render subtitle frame (RGBA)
     subtitle_frame = render_frame(t, pages, fonts)
 
-    # Create background
-    bg = Image.new('RGBA', (WIDTH, HEIGHT), bg_color)
+    # Create background - either from video frame or solid color
+    if isinstance(bg_info, str) and os.path.exists(bg_info):
+        # bg_info is path to background frame
+        bg = Image.open(bg_info).convert('RGBA')
+    else:
+        # bg_info is color tuple
+        bg_color = bg_info if isinstance(bg_info, tuple) else (15, 15, 20, 255)
+        bg = Image.new('RGBA', (WIDTH, HEIGHT), bg_color)
 
     # Composite subtitle over background
     subtitle_img = Image.fromarray(subtitle_frame)
     final = Image.alpha_composite(bg, subtitle_img)
 
-    # Convert to RGB (no alpha) and save as JPEG for speed
+    # Convert to RGB (no alpha) and save as PNG
     final_rgb = final.convert('RGB')
     final_rgb.save(output_path, 'PNG')
 
@@ -562,6 +588,110 @@ def process_background_frame(frame: np.ndarray, darken: float = BG_DARKEN, desat
     img = img * darken
 
     return img.clip(0, 255).astype(np.uint8)
+
+
+def extract_background_frames(bg_videos: List[str], page_times: List[Tuple[float, float]],
+                               temp_dir: str, total_frames: int, fps: int = 30,
+                               darken: float = BG_DARKEN, desaturate: float = BG_DESATURATE) -> Dict[int, str]:
+    """
+    Extract background frames for all video frames based on page timing.
+    Returns mapping of frame_idx -> background frame path.
+    """
+    if not bg_videos or not page_times:
+        return {}
+
+    print(f"\nExtracting background frames for {total_frames} frames...")
+
+    # Create bg frames subdirectory
+    bg_frames_dir = os.path.join(temp_dir, 'bg_frames')
+    os.makedirs(bg_frames_dir, exist_ok=True)
+
+    # Build mapping: frame_idx -> page_idx -> video_idx
+    def get_page_for_time(t):
+        for i, (start, end) in enumerate(page_times):
+            if start <= t < end + 0.5:
+                return i
+        # After last page - use last page's video
+        if page_times and t >= page_times[-1][0]:
+            return len(page_times) - 1
+        return 0
+
+    # Load all background videos once
+    clips = {}
+    for i, path in enumerate(bg_videos):
+        try:
+            clips[i] = VideoFileClip(path)
+            print(f"  Loaded: {os.path.basename(path)} ({clips[i].duration:.1f}s)")
+        except Exception as e:
+            print(f"  Warning: Could not load {path}: {e}")
+
+    if not clips:
+        return {}
+
+    frame_mapping = {}
+    bg_frame_cache = {}  # (video_idx, video_frame) -> path
+
+    # Process frames in batches for progress reporting
+    batch_size = 100
+    for batch_start in range(0, total_frames, batch_size):
+        batch_end = min(batch_start + batch_size, total_frames)
+
+        for frame_idx in range(batch_start, batch_end):
+            t = frame_idx / fps
+            page_idx = get_page_for_time(t)
+            video_idx = page_idx % len(bg_videos)
+
+            if video_idx not in clips:
+                # Fallback to first available video
+                video_idx = next(iter(clips.keys()))
+
+            clip = clips[video_idx]
+            video_t = t % clip.duration
+            cache_key = (video_idx, round(video_t * fps))
+
+            if cache_key not in bg_frame_cache:
+                # Extract and process frame
+                frame = clip.get_frame(video_t)
+                frame_img = Image.fromarray(frame)
+
+                # Crop to 9:16 aspect ratio
+                src_w, src_h = frame_img.size
+                target_ratio = WIDTH / HEIGHT
+                src_ratio = src_w / src_h
+
+                if src_ratio > target_ratio:
+                    new_w = int(src_h * target_ratio)
+                    offset = (src_w - new_w) // 2
+                    frame_img = frame_img.crop((offset, 0, offset + new_w, src_h))
+                else:
+                    new_h = int(src_w / target_ratio)
+                    offset = (src_h - new_h) // 2
+                    frame_img = frame_img.crop((0, offset, src_w, offset + new_h))
+
+                frame_img = frame_img.resize((WIDTH, HEIGHT), Image.LANCZOS)
+                frame_arr = np.array(frame_img)
+
+                # Apply effects
+                frame_arr = process_background_frame(frame_arr, darken, desaturate)
+
+                # Save
+                bg_frame_path = os.path.join(bg_frames_dir, f'bg_{video_idx}_{cache_key[1]:06d}.png')
+                Image.fromarray(frame_arr).save(bg_frame_path, 'PNG')
+                bg_frame_cache[cache_key] = bg_frame_path
+
+            frame_mapping[frame_idx] = bg_frame_cache[cache_key]
+
+        # Progress
+        progress = 100 * batch_end / total_frames
+        print(f"  Extracted {batch_end}/{total_frames} ({progress:.0f}%)", end='\r')
+
+    print(f"\n  Done: {len(bg_frame_cache)} unique background frames")
+
+    # Cleanup
+    for clip in clips.values():
+        clip.close()
+
+    return frame_mapping
 
 
 def get_page_times(pages: List[List['StyledWord']]) -> List[Tuple[float, float]]:
@@ -863,15 +993,40 @@ def create_styled_video(
             # Serialize pages for multiprocessing
             pages_data = serialize_pages(pages)
 
-            # Background color (dark)
-            bg_color = (15, 15, 20, 255)
+            # Load background videos for parallel rendering
+            bg_videos = []
+            if backgrounds_dir and os.path.exists(backgrounds_dir):
+                catalog = load_background_catalog(backgrounds_dir)
+                if catalog:
+                    print(f"\nLoaded {len(catalog)} backgrounds from catalog")
+                    for vid in catalog:
+                        if os.path.exists(vid['path']):
+                            bg_videos.append(vid['path'])
+                            print(f"  - {vid['filename']}")
+
+            # Or use single background
+            if not bg_videos and background_path and os.path.exists(background_path):
+                bg_videos = [background_path]
+                print(f"\nUsing single background: {background_path}")
+
+            # Pre-extract background frames if we have videos
+            bg_frame_mapping = {}
+            if bg_videos:
+                bg_frame_mapping = extract_background_frames(
+                    bg_videos, page_times, temp_dir, total_frames, FPS, darken, desaturate
+                )
+
+            # Default background color (dark) for frames without video bg
+            default_bg_color = (15, 15, 20, 255)
 
             # Prepare tasks
             tasks = []
             for frame_idx in range(total_frames):
                 t = frame_idx / FPS
                 frame_path = os.path.join(temp_dir, f'frame_{frame_idx:06d}.png')
-                tasks.append((frame_idx, t, pages_data, FONT_PATH, frame_path, bg_color))
+                # Use video background frame if available, otherwise solid color
+                bg_info = bg_frame_mapping.get(frame_idx, default_bg_color)
+                tasks.append((frame_idx, t, pages_data, FONT_PATH, frame_path, bg_info))
 
             # Render frames in parallel
             completed = 0
