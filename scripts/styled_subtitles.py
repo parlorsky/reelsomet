@@ -8,6 +8,7 @@ Styled Subtitles - Word-by-word subtitles with custom styling markup
     [c:FF5500]слово[/]  - явный цвет (hex без #)
     [s:120]слово[/]     - явный размер (px)
     [c:red,s:80]слово[/] - комбинация
+    [img:filename.jpg]  - вставка изображения с эффектом pop_drift
     ---                 - новая страница (очистка экрана)
 
 Цвета по имени: red, green, blue, yellow, orange, purple, pink, white, gray
@@ -81,6 +82,20 @@ ACCENT_SIZE = 110  # HUGE impact words
 HIGHLIGHT_SIZE = 88
 MUTED_SIZE = 58  # Clearly secondary
 
+# Image overlay settings
+IMAGE_MAX_WIDTH = 420  # Max width for overlay images (px)
+IMAGE_MAX_HEIGHT = 380  # Max height for overlay images (px)
+IMAGE_AREA_Y = 450  # Y position for images center (above text area which starts at 700)
+IMAGE_CORNER_RADIUS = 16  # Rounded corners
+IMAGE_SHADOW_OFFSET = 6  # Shadow offset
+IMAGE_SHADOW_BLUR = 12  # Shadow blur radius
+
+# Pop drift effect settings
+POP_DURATION = 0.18  # Duration of pop-in animation (fast!)
+POP_OVERSHOOT = 1.08  # Scale overshoot (108%)
+DRIFT_SPEED = 0.002  # Zoom speed per frame (0.2% per frame)
+FADE_OUT_DURATION = 0.12  # Quick fade out
+
 # Named colors - VIBRANT palette for Reels
 COLOR_MAP = {
     'white': (255, 255, 255),
@@ -119,6 +134,26 @@ class StyledWord:
     y: float = 0.0
 
 
+@dataclass
+class ImageOverlay:
+    """An image overlay with timing and effect information."""
+    filename: str  # Image filename (relative to images/ or absolute)
+    page_idx: int = 0  # Which page this image belongs to
+
+    # Timing (filled from page timing)
+    start: float = 0.0
+    end: float = 0.0
+
+    # Position and size (calculated during layout)
+    x: float = 0.0
+    y: float = 0.0
+    width: float = 0.0
+    height: float = 0.0
+
+    # Loaded image (PIL Image, filled during rendering)
+    _image: Optional[Image.Image] = field(default=None, repr=False)
+
+
 def parse_color(color_str: str) -> Tuple[int, int, int]:
     """Parse color from hex or name."""
     color_str = color_str.lower().strip()
@@ -144,9 +179,9 @@ def parse_color(color_str: str) -> Tuple[int, int, int]:
     return (255, 255, 255)  # default white
 
 
-def parse_styled_text(text: str) -> List[StyledWord]:
+def parse_styled_text(text: str) -> Tuple[List[StyledWord], List[ImageOverlay]]:
     """
-    Parse text with styling markup into list of StyledWord objects.
+    Parse text with styling markup into list of StyledWord objects and ImageOverlay objects.
 
     Markup:
         **word** - accent (large, white)
@@ -155,9 +190,12 @@ def parse_styled_text(text: str) -> List[StyledWord]:
         [c:color]word[/] - custom color
         [s:size]word[/]  - custom size
         [c:color,s:size]word[/] - combo
+        [img:filename.jpg] - image overlay
         ---      - page break
     """
     words = []
+    images = []
+    current_page_idx = 0
 
     # Split into tokens (words and page breaks)
     # First handle page breaks
@@ -170,6 +208,7 @@ def parse_styled_text(text: str) -> List[StyledWord]:
                 text='',
                 page_break_before=True
             ))
+            current_page_idx += 1
 
         # Process this part
         part = part.strip()
@@ -177,8 +216,9 @@ def parse_styled_text(text: str) -> List[StyledWord]:
             continue
 
         # Tokenize while preserving markup
-        # Pattern to match styled segments
+        # Pattern to match styled segments (added image pattern)
         pattern = r'''
+            (\[img:[^\]]+\])          |  # [img:filename]
             (\*\*[^*]+\*\*)           |  # **accent**
             (\*[^*]+\*)               |  # *highlight*
             (_[^_]+_)                 |  # _muted_
@@ -194,8 +234,17 @@ def parse_styled_text(text: str) -> List[StyledWord]:
 
             word = None
 
+            # [img:filename]
+            if token.startswith('[img:') and token.endswith(']'):
+                filename = token[5:-1].strip()
+                images.append(ImageOverlay(
+                    filename=filename,
+                    page_idx=current_page_idx
+                ))
+                continue  # Don't add as word
+
             # **accent**
-            if token.startswith('**') and token.endswith('**'):
+            elif token.startswith('**') and token.endswith('**'):
                 inner = token[2:-2].strip()
                 word = StyledWord(
                     text=inner,
@@ -271,7 +320,7 @@ def parse_styled_text(text: str) -> List[StyledWord]:
     # Remove any empty words
     words = [w for w in words if w.text]
 
-    return words
+    return words, images
 
 
 def normalize_for_match(text: str) -> str:
@@ -492,7 +541,11 @@ def layout_words(words: List[StyledWord], font_path: str) -> List[List[StyledWor
 
 def render_frame_to_file(args):
     """Render a single frame to file (for parallel processing)."""
-    frame_idx, t, pages_data, font_path, output_path, bg_info = args
+    if len(args) == 6:
+        frame_idx, t, pages_data, font_path, output_path, bg_info = args
+        images_data = None
+    else:
+        frame_idx, t, pages_data, font_path, output_path, bg_info, images_data = args
 
     # Reload fonts in this process
     fonts = {}
@@ -517,8 +570,28 @@ def render_frame_to_file(args):
             page.append(word)
         pages.append(page)
 
+    # Reconstruct images from serializable data
+    images = None
+    if images_data:
+        images = []
+        for img_data in images_data:
+            img_overlay = ImageOverlay(
+                filename=img_data['filename'],
+                page_idx=img_data['page_idx'],
+                start=img_data['start'],
+                end=img_data['end'],
+                x=img_data['x'],
+                y=img_data['y'],
+                width=img_data['width'],
+                height=img_data['height']
+            )
+            # Load image from cached path
+            if img_data.get('cached_path') and os.path.exists(img_data['cached_path']):
+                img_overlay._image = Image.open(img_data['cached_path']).convert('RGBA')
+            images.append(img_overlay)
+
     # Render subtitle frame (RGBA)
-    subtitle_frame = render_frame(t, pages, fonts)
+    subtitle_frame = render_frame(t, pages, fonts, images=images)
 
     # Create background - either from video frame or solid color
     if isinstance(bg_info, str) and os.path.exists(bg_info):
@@ -560,10 +633,226 @@ def serialize_pages(pages: List[List['StyledWord']]) -> List[List[dict]]:
     ]
 
 
+def serialize_images(images: List['ImageOverlay'], temp_dir: str) -> List[dict]:
+    """Convert images to serializable format for multiprocessing.
+    Saves images to temp files and returns paths."""
+    if not images:
+        return None
+
+    result = []
+    for i, img in enumerate(images):
+        # Save image to temp file for workers to load
+        cached_path = None
+        if img._image:
+            cached_path = os.path.join(temp_dir, f'img_cache_{i}.png')
+            img._image.save(cached_path, 'PNG')
+
+        result.append({
+            'filename': img.filename,
+            'page_idx': img.page_idx,
+            'start': img.start,
+            'end': img.end,
+            'x': img.x,
+            'y': img.y,
+            'width': img.width,
+            'height': img.height,
+            'cached_path': cached_path
+        })
+    return result
+
+
 def ease_out_back(t: float) -> float:
     c1 = 1.70158
     c3 = c1 + 1
     return 1 + c3 * pow(t - 1, 3) + c1 * pow(t - 1, 2)
+
+
+def ease_out_elastic(t: float) -> float:
+    """Elastic ease-out for bouncy pop effect."""
+    if t == 0 or t == 1:
+        return t
+    p = 0.3
+    s = p / 4
+    return pow(2, -10 * t) * math.sin((t - s) * (2 * math.pi) / p) + 1
+
+
+def load_and_prepare_image(image_path: str, max_width: int = IMAGE_MAX_WIDTH,
+                           max_height: int = IMAGE_MAX_HEIGHT) -> Optional[Image.Image]:
+    """Load image and prepare it with rounded corners and shadow."""
+    if not os.path.exists(image_path):
+        print(f"  Warning: Image not found: {image_path}")
+        return None
+
+    try:
+        img = Image.open(image_path).convert('RGBA')
+
+        # Resize to fit max dimensions while preserving aspect ratio
+        img.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+
+        # Add rounded corners
+        img = add_rounded_corners(img, IMAGE_CORNER_RADIUS)
+
+        return img
+    except Exception as e:
+        print(f"  Warning: Could not load image {image_path}: {e}")
+        return None
+
+
+def add_rounded_corners(img: Image.Image, radius: int) -> Image.Image:
+    """Add rounded corners to image."""
+    # Create mask for rounded corners
+    mask = Image.new('L', img.size, 0)
+    draw = ImageDraw.Draw(mask)
+    draw.rounded_rectangle([(0, 0), img.size], radius=radius, fill=255)
+
+    # Apply mask
+    result = img.copy()
+    result.putalpha(mask)
+
+    return result
+
+
+def create_image_with_shadow(img: Image.Image, shadow_offset: int = IMAGE_SHADOW_OFFSET,
+                             shadow_blur: int = IMAGE_SHADOW_BLUR) -> Image.Image:
+    """Create image with drop shadow for depth."""
+    # Calculate canvas size (image + shadow space)
+    padding = shadow_blur * 2 + shadow_offset
+    canvas_size = (img.width + padding * 2, img.height + padding * 2)
+
+    # Create shadow
+    shadow = Image.new('RGBA', canvas_size, (0, 0, 0, 0))
+    shadow_layer = Image.new('RGBA', img.size, (0, 0, 0, 180))
+
+    # Apply rounded corners to shadow
+    shadow_layer = add_rounded_corners(shadow_layer, IMAGE_CORNER_RADIUS)
+
+    # Paste shadow offset
+    shadow.paste(shadow_layer, (padding + shadow_offset, padding + shadow_offset))
+
+    # Blur shadow
+    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=shadow_blur))
+
+    # Paste original image
+    shadow.paste(img, (padding, padding), img)
+
+    return shadow
+
+
+def render_image_pop_drift(img: Image.Image, t: float, start: float, end: float,
+                           center_x: float, center_y: float) -> Optional[Tuple[Image.Image, int, int]]:
+    """
+    Render image with pop_drift effect.
+    Returns (processed_image, x, y) or None if not visible.
+
+    Effect:
+    - Pop in: Quick scale from 0 to 108% then settle to 100% (0.18s)
+    - Drift: Slow continuous zoom while visible (0.2% per frame)
+    - Fade out: Quick alpha fade (0.12s)
+    """
+    if t < start or t > end + FADE_OUT_DURATION:
+        return None
+
+    # Calculate animation phases
+    time_in = t - start
+    duration = end - start
+
+    # Phase 1: Pop in (0 to POP_DURATION)
+    if time_in < POP_DURATION:
+        progress = time_in / POP_DURATION
+        # Use elastic ease for bouncy pop
+        eased = ease_out_elastic(progress)
+        scale = eased * POP_OVERSHOOT
+        if progress > 0.7:
+            # Settle from overshoot to 1.0
+            settle_progress = (progress - 0.7) / 0.3
+            scale = POP_OVERSHOOT - (POP_OVERSHOOT - 1.0) * settle_progress
+        alpha = min(255, int(255 * progress * 2))  # Quick fade in
+
+    # Phase 2: Drift (POP_DURATION to end)
+    elif t <= end:
+        drift_time = time_in - POP_DURATION
+        # Continuous slow zoom
+        scale = 1.0 + drift_time * DRIFT_SPEED * FPS
+        alpha = 255
+
+    # Phase 3: Fade out (end to end + FADE_OUT_DURATION)
+    else:
+        fade_progress = (t - end) / FADE_OUT_DURATION
+        scale = 1.0 + (duration - POP_DURATION) * DRIFT_SPEED * FPS
+        alpha = int(255 * (1 - fade_progress))
+
+    if alpha <= 0:
+        return None
+
+    # Apply scale
+    new_width = int(img.width * scale)
+    new_height = int(img.height * scale)
+
+    if new_width <= 0 or new_height <= 0:
+        return None
+
+    scaled = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+    # Apply alpha
+    if alpha < 255:
+        # Modify alpha channel
+        r, g, b, a = scaled.split()
+        a = a.point(lambda x: int(x * alpha / 255))
+        scaled = Image.merge('RGBA', (r, g, b, a))
+
+    # Calculate position (centered)
+    x = int(center_x - new_width / 2)
+    y = int(center_y - new_height / 2)
+
+    return scaled, x, y
+
+
+def prepare_images_for_pages(images: List[ImageOverlay], page_times: List[Tuple[float, float]],
+                             script_dir: str) -> List[ImageOverlay]:
+    """Load images and assign timing based on page times."""
+    images_dir = os.path.join(script_dir, 'images')
+
+    for img_overlay in images:
+        # Find image file
+        if os.path.isabs(img_overlay.filename):
+            image_path = img_overlay.filename
+        else:
+            # Check in script's images directory first
+            image_path = os.path.join(images_dir, img_overlay.filename)
+            if not os.path.exists(image_path):
+                # Check in downloads/images
+                image_path = os.path.join(os.path.dirname(script_dir), 'downloads', 'images', img_overlay.filename)
+            if not os.path.exists(image_path):
+                # Check in input/images
+                image_path = os.path.join(script_dir, img_overlay.filename)
+
+        # Load and prepare image
+        img = load_and_prepare_image(image_path)
+        if img:
+            # Add shadow
+            img = create_image_with_shadow(img)
+            img_overlay._image = img
+            img_overlay.width = img.width
+            img_overlay.height = img.height
+
+            # Calculate center position (above text area)
+            img_overlay.x = WIDTH // 2
+            # Center image at IMAGE_AREA_Y (safe zone above text)
+            img_overlay.y = IMAGE_AREA_Y
+
+            # Set timing from page
+            if img_overlay.page_idx < len(page_times):
+                start, end = page_times[img_overlay.page_idx]
+                img_overlay.start = start
+                img_overlay.end = end
+            else:
+                print(f"  Warning: Image page_idx {img_overlay.page_idx} out of range")
+
+            print(f"  Loaded image: {img_overlay.filename} ({img.width}x{img.height}) for page {img_overlay.page_idx + 1}")
+        else:
+            print(f"  Warning: Could not load image: {img_overlay.filename}")
+
+    return [img for img in images if img._image is not None]
 
 
 def load_background_catalog(backgrounds_dir: str) -> List[dict]:
@@ -711,10 +1000,26 @@ def get_page_times(pages: List[List['StyledWord']]) -> List[Tuple[float, float]]
     return page_times
 
 
-def render_frame(t: float, pages: List[List[StyledWord]], fonts: dict, all_words: List[StyledWord] = None) -> np.ndarray:
-    """Render frame at time t with enhanced glow effect."""
+def render_frame(t: float, pages: List[List[StyledWord]], fonts: dict,
+                 all_words: List[StyledWord] = None, images: List[ImageOverlay] = None) -> np.ndarray:
+    """Render frame at time t with enhanced glow effect and image overlays."""
     img = Image.new('RGBA', (WIDTH, HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
+
+    # Render images first (behind text)
+    if images:
+        for img_overlay in images:
+            if img_overlay._image is None:
+                continue
+            result = render_image_pop_drift(
+                img_overlay._image, t,
+                img_overlay.start, img_overlay.end,
+                img_overlay.x, img_overlay.y
+            )
+            if result:
+                rendered_img, x, y = result
+                # Paste image onto frame
+                img.paste(rendered_img, (x, y), rendered_img)
 
     # Orphan words that should wait for next word
     ORPHAN_WORDS = {'от', 'в', 'на', 'с', 'и', 'а', 'к', 'у', 'о', 'за', 'из', 'по', 'до', 'не', 'но', 'же', 'бы'}
@@ -1120,8 +1425,10 @@ def create_styled_video(
         script_text = f.read()
 
     # Parse styled text
-    words = parse_styled_text(script_text)
+    words, images = parse_styled_text(script_text)
     print(f"Parsed {len(words)} styled words")
+    if images:
+        print(f"Found {len(images)} image overlays")
 
     # Load timestamps
     print(f"Loading timestamps: {timestamps_path}")
@@ -1140,6 +1447,12 @@ def create_styled_video(
     print(f"\nPage timings:")
     for i, (start, end) in enumerate(page_times):
         print(f"  Page {i+1}: {start:.2f}s - {end:.2f}s")
+
+    # Prepare images with timing
+    if images:
+        script_dir = os.path.dirname(os.path.abspath(script_path))
+        images = prepare_images_for_pages(images, page_times, script_dir)
+        print(f"\nPrepared {len(images)} images for rendering")
 
     # Preview
     print("\nStyled words preview:")
@@ -1196,10 +1509,13 @@ def create_styled_video(
             bg_pil = Image.fromarray(darkened).convert('RGBA')
             bg_pil = bg_pil.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
 
+            # Get images for page 0 (freeze frame)
+            freeze_images = [img for img in images if img.page_idx == 0] if images else []
+
             # Render freeze frames with subtitles
             for frame_idx in range(page1_frames):
                 t = frame_idx / FPS
-                subtitle_frame = render_frame(t, freeze_pages, fonts)
+                subtitle_frame = render_frame(t, freeze_pages, fonts, images=freeze_images)
 
                 # Combine darkened background with subtitle
                 sub_img = Image.fromarray(subtitle_frame)
@@ -1276,6 +1592,10 @@ def create_styled_video(
             main_pages = pages[1:]
             main_pages_data = serialize_pages(main_pages)
 
+            # Get images for pages 1+ and serialize
+            main_images = [img for img in images if img.page_idx > 0] if images else []
+            main_images_data = serialize_images(main_images, main_frames_dir) if main_images else None
+
             # Prepare tasks for main video rendering
             tasks = []
             for frame_idx in range(main_total_frames):
@@ -1283,7 +1603,7 @@ def create_styled_video(
                 t = main_start_time + frame_idx / FPS
                 frame_path = os.path.join(main_frames_dir, f'frame_{frame_idx:06d}.png')
                 bg_info = bg_frame_mapping.get(frame_idx, default_bg_color)
-                tasks.append((frame_idx, t, main_pages_data, FONT_PATH, frame_path, bg_info))
+                tasks.append((frame_idx, t, main_pages_data, FONT_PATH, frame_path, bg_info, main_images_data))
 
             # Render main frames in parallel
             completed = 0
@@ -1373,6 +1693,9 @@ def create_styled_video(
             # Serialize pages for multiprocessing
             pages_data = serialize_pages(pages)
 
+            # Serialize images for multiprocessing
+            images_data = serialize_images(images, temp_dir) if images else None
+
             # Load background videos for parallel rendering
             bg_videos = []
 
@@ -1460,7 +1783,7 @@ def create_styled_video(
                 frame_path = os.path.join(temp_dir, f'frame_{frame_idx:06d}.png')
                 # Use video background frame if available, otherwise solid color
                 bg_info = bg_frame_mapping.get(frame_idx, default_bg_color)
-                tasks.append((frame_idx, t, pages_data, FONT_PATH, frame_path, bg_info))
+                tasks.append((frame_idx, t, pages_data, FONT_PATH, frame_path, bg_info, images_data))
 
             # Render frames in parallel
             completed = 0
@@ -1538,7 +1861,7 @@ def create_styled_video(
         def get_cached_frame(t):
             frame_key = round(t * FPS)
             if frame_key not in frame_cache:
-                frame_cache[frame_key] = render_frame(t, pages, fonts)
+                frame_cache[frame_key] = render_frame(t, pages, fonts, images=images)
             return frame_cache[frame_key]
 
         def make_subtitle_frame(t):

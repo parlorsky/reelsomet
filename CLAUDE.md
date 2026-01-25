@@ -83,9 +83,30 @@ Hook options:
 - `*word*` - highlight (88px, yellow)
 - `_word_` - muted (58px, gray)
 - `[c:color]word[/]` - custom color
+- `[img:filename.jpg]` - image overlay with pop_drift effect
 - `---` - page break
 
 **Colors:** white, gray, red, green, blue, yellow, orange, purple, pink, cyan, coral, lime, gold, rose
+
+**Image overlays:**
+Insert images with dynamic pop_drift effect (bounce-in + continuous zoom):
+```
+[img:book_cover.jpg]
+[c:cyan]Автор[/] _в_ _книге_
+*«Название»* пишет
+```
+
+Image features:
+- Automatic rounded corners and drop shadow
+- Pop-in animation (0.18s elastic bounce)
+- Continuous slow zoom while visible (drift effect)
+- Quick fade-out at page end
+- Positioned above text (doesn't overlap subtitles)
+
+Image locations (checked in order):
+1. `input/images/filename.jpg`
+2. `downloads/images/filename.jpg`
+3. Absolute path
 
 ### kie_tts.py - TTS Generation
 ```bash
