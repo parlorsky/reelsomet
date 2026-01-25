@@ -1,90 +1,272 @@
 {
   "version": "1.0",
-  "last_updated": "2026-01-24T15:39:22.842372",
+  "last_updated": "2026-01-24T20:30:00Z",
   "videos": [
     {
-      "filename": "262e68f62363d13135b5b9ade6335403.mp4",
-      "path": "/Users/parlorsky/Desktop/reelsomet/downloads/backgrounds/262e68f62363d13135b5b9ade6335403.mp4",
+      "filename": "pinterest_148126275239151077.mp4",
+      "path": "D:/insta/reelsomet/downloads/backgrounds/pinterest_148126275239151077.mp4",
+      "thumbnail": "thumbnails/pinterest_148126275239151077.jpg",
       "technical": {
-        "duration": 18.229002,
-        "resolution": [576, 1024],
-        "fps": 60,
-        "orientation": "vertical",
-        "codec": "h264",
-        "file_size_mb": 1.7
-      },
-      "visual": {
-        "dominant_colors": ["#faf9e1", "#c0b7a5", "#7d403b"],
-        "brightness": 0.93,
-        "contrast": 0.26,
-        "saturation": 0.12,
-        "motion_speed": "fast"
-      },
-      "tags": {
-        "style": ["anime", "minimal", "abstract"],
-        "mood": ["energetic", "creative"],
-        "elements": ["drawing", "lines", "illustration"],
-        "text_friendly": false,
-        "description": "Anime-style illustration with drawing/sketching motion on light background"
-      },
-      "thumbnail": "thumbnails/262e68f62363d13135b5b9ade6335403.jpg",
-      "analyzed_at": "2026-01-24T15:39:23.438471"
-    },
-    {
-      "filename": "d8833f640b54415b27da1f35a3c247f9_720w.mp4",
-      "path": "/Users/parlorsky/Desktop/reelsomet/downloads/backgrounds/d8833f640b54415b27da1f35a3c247f9_720w.mp4",
-      "technical": {
-        "duration": 10.837007,
+        "duration": 22.08,
         "resolution": [720, 1280],
+        "orientation": "vertical",
         "fps": 30,
-        "orientation": "vertical",
         "codec": "h264",
-        "file_size_mb": 1.23
+        "file_size_mb": 8.9,
+        "is_loop": true
       },
       "visual": {
-        "dominant_colors": ["#2c231b", "#644d3c", "#b29a8b"],
-        "brightness": 0.25,
-        "contrast": 0.32,
-        "saturation": 0.37,
-        "motion_speed": "slow"
+        "dominant_colors": ["#e8a4c0", "#f5d4a8", "#8bc98e", "#c45e8b"],
+        "brightness": 0.75,
+        "contrast": 0.45,
+        "saturation": 0.65,
+        "motion_speed": "slow",
+        "text_friendly": true
       },
+      "semantic": {
+        "style": ["anime", "lofi", "chibi"],
+        "mood": ["cute", "happy", "energetic", "playful"],
+        "elements": ["anime_girl", "chibi", "flowers", "pink_flowers", "sunlight", "sparkles", "pixel_sunglasses", "minecraft_style"],
+        "color_palette": "warm",
+        "time_of_day": "day"
+      },
+      "timeline": [
+        {"time": "0:00-0:05", "description": "Chibi-персонаж лежит среди розовых цветов с солнечным светом", "motion": "slow"},
+        {"time": "0:05-0:10", "description": "Персонаж встает, надевает пиксельные очки в стиле thug life", "motion": "medium"},
+        {"time": "0:10-0:15", "description": "Персонаж позирует в очках на фоне цветочного поля", "motion": "slow"},
+        {"time": "0:15-0:22", "description": "Камера приближается, видны детали и блики солнца", "motion": "slow"}
+      ],
       "tags": {
-        "style": ["cinematic", "fantasy", "vintage"],
-        "mood": ["melancholic", "sad", "mysterious", "calm"],
-        "elements": ["knight", "armor", "flowers", "sunlight", "field"],
-        "text_friendly": true,
-        "description": "Knight in ornate armor lying peacefully in a flower field with soft golden light"
+        "description": "Chibi аниме-персонаж в пиксельных очках на фоне розового цветочного поля с солнечным светом"
       },
-      "thumbnail": "thumbnails/d8833f640b54415b27da1f35a3c247f9_720w.jpg",
-      "analyzed_at": "2026-01-24T15:39:24.292395"
+      "analyzed_at": "2026-01-24T20:30:00Z"
     },
     {
-      "filename": "fa3458bda307d9d41eae59a9e5821f66_t5.mp4",
-      "path": "/Users/parlorsky/Desktop/reelsomet/downloads/backgrounds/fa3458bda307d9d41eae59a9e5821f66_t5.mp4",
+      "filename": "pinterest_161848180356130394.mp4",
+      "path": "D:/insta/reelsomet/downloads/backgrounds/pinterest_161848180356130394.mp4",
+      "thumbnail": "thumbnails/pinterest_161848180356130394.jpg",
       "technical": {
-        "duration": 12.144,
-        "resolution": [720, 1280],
-        "fps": 60,
+        "duration": 40.10,
+        "resolution": [704, 1376],
         "orientation": "vertical",
-        "codec": "hevc",
-        "file_size_mb": 4.16
+        "fps": 60,
+        "codec": "h264",
+        "file_size_mb": 12.4,
+        "is_loop": true
       },
       "visual": {
-        "dominant_colors": ["#668b88", "#45493d", "#c9cfc4"],
-        "brightness": 0.47,
-        "contrast": 0.42,
-        "saturation": 0.35,
-        "motion_speed": "fast"
+        "dominant_colors": ["#1a2832", "#3d5c4a", "#f5c8b8", "#e8d0c0"],
+        "brightness": 0.25,
+        "contrast": 0.55,
+        "saturation": 0.40,
+        "motion_speed": "slow",
+        "text_friendly": true
       },
+      "semantic": {
+        "style": ["anime", "lofi", "night"],
+        "mood": ["calm", "melancholic", "lonely", "chill", "nostalgic"],
+        "elements": ["anime_girl", "pink_hair", "horns", "hoodie", "night", "trees", "street_lights", "city", "lollipop"],
+        "color_palette": "cool",
+        "time_of_day": "night"
+      },
+      "timeline": [
+        {"time": "0:00-0:10", "description": "Zero Two в белой толстовке стоит на ночной улице под деревьями", "motion": "slow"},
+        {"time": "0:10-0:20", "description": "Камера медленно движется, видны уличные фонари вдали", "motion": "slow"},
+        {"time": "0:20-0:30", "description": "Персонаж с леденцом, волосы развеваются на ветру", "motion": "slow"},
+        {"time": "0:30-0:40", "description": "Атмосферный план с ночным освещением и деревьями", "motion": "slow"}
+      ],
       "tags": {
-        "style": ["anime", "lofi", "nature"],
-        "mood": ["calm", "peaceful", "adventurous", "cozy"],
-        "elements": ["forest", "trees", "sunlight", "characters", "backpack", "rainbow"],
-        "text_friendly": false,
-        "description": "Studio Ghibli-style forest scene with tall trees, sunbeams, and travelers"
+        "description": "Zero Two из Darling in the Franxx на ночной улице под деревьями, лофи атмосфера"
       },
-      "thumbnail": "thumbnails/fa3458bda307d9d41eae59a9e5821f66_t5.jpg",
-      "analyzed_at": "2026-01-24T15:39:26.748315"
+      "analyzed_at": "2026-01-24T20:30:00Z"
+    },
+    {
+      "filename": "pinterest_48624870973153103.mp4",
+      "path": "D:/insta/reelsomet/downloads/backgrounds/pinterest_48624870973153103.mp4",
+      "thumbnail": "thumbnails/pinterest_48624870973153103.jpg",
+      "technical": {
+        "duration": 10.20,
+        "resolution": [720, 1280],
+        "orientation": "vertical",
+        "fps": 24,
+        "codec": "h264",
+        "file_size_mb": 3.3,
+        "is_loop": true
+      },
+      "visual": {
+        "dominant_colors": ["#c44a5a", "#e87080", "#f8a0a0", "#4a5a7a", "#2a3a5a"],
+        "brightness": 0.55,
+        "contrast": 0.60,
+        "saturation": 0.70,
+        "motion_speed": "medium",
+        "text_friendly": false
+      },
+      "semantic": {
+        "style": ["cinematic", "fantasy", "epic", "dark_fantasy"],
+        "mood": ["epic", "romantic", "melancholic", "dramatic", "heroic"],
+        "elements": ["knight", "armor", "roses", "red_roses", "castle", "sunset", "clouds", "cape", "fantasy"],
+        "color_palette": "warm",
+        "time_of_day": "sunset"
+      },
+      "timeline": [
+        {"time": "0:00-0:03", "description": "Рыцарь в доспехах стоит в поле красных роз на закате", "motion": "slow"},
+        {"time": "0:03-0:06", "description": "Плащ развевается на ветру, на фоне замок и драматические облака", "motion": "medium"},
+        {"time": "0:06-0:10", "description": "Рыцарь идет к замку через поле роз, эпический кадр", "motion": "medium"}
+      ],
+      "tags": {
+        "description": "Эпический рыцарь в поле красных роз на закате с замком на горизонте"
+      },
+      "analyzed_at": "2026-01-24T20:30:00Z"
+    },
+    {
+      "filename": "pinterest_58687601390694374.mp4",
+      "path": "D:/insta/reelsomet/downloads/backgrounds/pinterest_58687601390694374.mp4",
+      "thumbnail": "thumbnails/pinterest_58687601390694374.jpg",
+      "technical": {
+        "duration": 24.87,
+        "resolution": [720, 1280],
+        "orientation": "vertical",
+        "fps": 30,
+        "codec": "h264",
+        "file_size_mb": 3.5,
+        "is_loop": true
+      },
+      "visual": {
+        "dominant_colors": ["#8040a0", "#c060d0", "#301050", "#f0a0d0", "#4020a0"],
+        "brightness": 0.35,
+        "contrast": 0.70,
+        "saturation": 0.80,
+        "motion_speed": "slow",
+        "text_friendly": false
+      },
+      "semantic": {
+        "style": ["cyberpunk", "neon", "pixel_art", "anime"],
+        "mood": ["cool", "futuristic", "edgy", "mysterious", "urban"],
+        "elements": ["anime_girl", "purple_hair", "neon_lights", "cyberpunk_city", "chinese_signs", "motorcycle", "futuristic_vehicle", "night_city"],
+        "color_palette": "vibrant",
+        "time_of_day": "night"
+      },
+      "timeline": [
+        {"time": "0:00-0:08", "description": "Аниме-девушка с фиолетовыми волосами у футуристического мотоцикла", "motion": "slow"},
+        {"time": "0:08-0:16", "description": "Неоновые вывески на китайском, киберпанк-город на фоне", "motion": "slow"},
+        {"time": "0:16-0:24", "description": "Мерцание неоновых огней, атмосфера ночного города", "motion": "slow"}
+      ],
+      "tags": {
+        "description": "Киберпанк аниме-девушка с фиолетовыми волосами в неоновом ночном городе"
+      },
+      "analyzed_at": "2026-01-24T20:30:00Z"
+    },
+    {
+      "filename": "pinterest_6192518232549059.mp4",
+      "path": "D:/insta/reelsomet/downloads/backgrounds/pinterest_6192518232549059.mp4",
+      "thumbnail": "thumbnails/pinterest_6192518232549059.jpg",
+      "technical": {
+        "duration": 15.47,
+        "resolution": [720, 1280],
+        "orientation": "vertical",
+        "fps": 30,
+        "codec": "h264",
+        "file_size_mb": 1.5,
+        "is_loop": true
+      },
+      "visual": {
+        "dominant_colors": ["#2a4a5a", "#4080a0", "#40a0b0", "#f0e8d0", "#3a3a4a"],
+        "brightness": 0.45,
+        "contrast": 0.50,
+        "saturation": 0.55,
+        "motion_speed": "slow",
+        "text_friendly": true
+      },
+      "semantic": {
+        "style": ["anime", "lofi", "slice_of_life"],
+        "mood": ["cozy", "calm", "nostalgic", "lonely", "chill"],
+        "elements": ["anime_girl", "convenience_store", "vending_machine", "mascot", "sitting", "night", "drinks"],
+        "color_palette": "cool",
+        "time_of_day": "night"
+      },
+      "timeline": [
+        {"time": "0:00-0:05", "description": "Аниме-девушка сидит у автомата с напитками с маскотом", "motion": "slow"},
+        {"time": "0:05-0:10", "description": "Уютная атмосфера магазина, персонаж задумчиво смотрит вдаль", "motion": "slow"},
+        {"time": "0:10-0:15", "description": "Детали интерьера магазина, яркие холодильники с напитками", "motion": "slow"}
+      ],
+      "tags": {
+        "description": "Аниме-девушка сидит у круглосуточного магазина ночью в lofi-стиле"
+      },
+      "analyzed_at": "2026-01-24T20:30:00Z"
+    },
+    {
+      "filename": "pinterest_78390849760736497.fV_HLSV3_MOBILE-608.mp4",
+      "path": "D:/insta/reelsomet/downloads/backgrounds/pinterest_78390849760736497.fV_HLSV3_MOBILE-608.mp4",
+      "thumbnail": "thumbnails/pinterest_78390849760736497.jpg",
+      "technical": {
+        "duration": 16.47,
+        "resolution": [720, 1280],
+        "orientation": "vertical",
+        "fps": 30,
+        "codec": "h264",
+        "file_size_mb": 1.1,
+        "is_loop": true
+      },
+      "visual": {
+        "dominant_colors": ["#d0d0d4", "#e0e0e4", "#2a2a3a", "#f8f0f0", "#4a4a6a"],
+        "brightness": 0.85,
+        "contrast": 0.30,
+        "saturation": 0.15,
+        "motion_speed": "medium",
+        "text_friendly": true
+      },
+      "semantic": {
+        "style": ["anime", "minimal", "clean"],
+        "mood": ["happy", "playful", "energetic", "cute"],
+        "elements": ["anime_girl", "blue_hair", "dancing", "school_uniform", "grey_background", "simple"],
+        "color_palette": "neutral",
+        "time_of_day": "undefined"
+      },
+      "timeline": [
+        {"time": "0:00-0:05", "description": "Аниме-персонаж с синими волосами танцует на сером фоне", "motion": "medium"},
+        {"time": "0:05-0:10", "description": "Различные танцевальные позы, персонаж улыбается", "motion": "medium"},
+        {"time": "0:10-0:16", "description": "Динамичные движения, школьная форма с черными шортами", "motion": "medium"}
+      ],
+      "tags": {
+        "description": "Танцующий аниме-персонаж с синими волосами на минималистичном сером фоне"
+      },
+      "analyzed_at": "2026-01-24T20:30:00Z"
+    },
+    {
+      "filename": "pinterest_06123fc064706472985b90409f8a25c6.gif",
+      "path": "D:/insta/reelsomet/downloads/backgrounds/pinterest_06123fc064706472985b90409f8a25c6.gif",
+      "thumbnail": "thumbnails/pinterest_06123fc064706472985b90409f8a25c6.jpg",
+      "technical": {
+        "duration": 0.33,
+        "resolution": [448, 498],
+        "orientation": "horizontal",
+        "fps": 30,
+        "codec": "gif",
+        "file_size_mb": 1.4,
+        "is_loop": true
+      },
+      "visual": {
+        "dominant_colors": ["#6040a0", "#8060c0", "#40e060", "#f8c8d0", "#4030a0"],
+        "brightness": 0.50,
+        "contrast": 0.65,
+        "saturation": 0.75,
+        "motion_speed": "fast",
+        "text_friendly": false
+      },
+      "semantic": {
+        "style": ["anime", "vibrant", "close_up"],
+        "mood": ["intense", "mysterious", "cool", "edgy"],
+        "elements": ["anime_girl", "purple_hair", "green_eyes", "close_up", "face"],
+        "color_palette": "vibrant",
+        "time_of_day": "undefined"
+      },
+      "timeline": [
+        {"time": "0:00-0:33", "description": "Крупный план аниме-персонажа с фиолетовыми волосами и зелеными глазами", "motion": "fast"}
+      ],
+      "tags": {
+        "description": "Короткий GIF с крупным планом аниме-персонажа с фиолетовыми волосами"
+      },
+      "analyzed_at": "2026-01-24T20:30:00Z"
     }
   ]
 }

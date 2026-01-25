@@ -38,9 +38,9 @@ if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 try:
-    from moviepy import VideoFileClip, AudioFileClip, CompositeVideoClip, ColorClip, VideoClip, concatenate_videoclips
+    from moviepy import VideoFileClip, AudioFileClip, CompositeVideoClip, ColorClip, VideoClip, ImageClip, concatenate_videoclips
 except ImportError:
-    from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip, ColorClip, VideoClip, concatenate_videoclips
+    from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip, ColorClip, VideoClip, ImageClip, concatenate_videoclips
 
 # Paths
 FONT_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "downloads", "fonts", "Montserrat-Bold.ttf")
@@ -283,50 +283,55 @@ def normalize_for_match(text: str) -> str:
 def apply_timestamps(words: List[StyledWord], timestamps: List[dict]) -> List[StyledWord]:
     """
     Apply timing from Whisper timestamps to styled words.
-    Matches words by text similarity.
+    Matches words by text similarity with lookahead to handle mismatches.
     """
     if not timestamps:
         return words
 
     ts_idx = 0
+    MAX_LOOKAHEAD = 10  # Max timestamps to look ahead for a match
 
-    for word in words:
+    for word_idx, word in enumerate(words):
         # Find matching timestamp
         word_clean = normalize_for_match(word.text)
 
         # Skip punctuation-only words (they clean to empty string)
         if not word_clean:
             # Estimate from previous word
-            if words.index(word) > 0:
-                prev = words[words.index(word) - 1]
+            if word_idx > 0:
+                prev = words[word_idx - 1]
                 word.start = prev.end
                 word.end = prev.end + 0.1
             continue
 
-        while ts_idx < len(timestamps):
-            ts = timestamps[ts_idx]
+        # Search for match with limited lookahead
+        found = False
+        search_start = ts_idx
+        search_end = min(ts_idx + MAX_LOOKAHEAD, len(timestamps))
+
+        for search_idx in range(search_start, search_end):
+            ts = timestamps[search_idx]
             ts_clean = normalize_for_match(ts['word'])
 
             # Skip empty timestamp words
             if not ts_clean:
-                ts_idx += 1
                 continue
 
             # Check for match (exact or partial)
             if word_clean == ts_clean or word_clean in ts_clean or ts_clean in word_clean:
                 word.start = ts['start']
                 word.end = ts['end']
-                ts_idx += 1
+                ts_idx = search_idx + 1  # Move past this timestamp
+                found = True
                 break
-            else:
-                # Skip timestamp if no match
-                ts_idx += 1
 
-        # If no match found, estimate from previous
-        if word.start == 0 and words.index(word) > 0:
-            prev = words[words.index(word) - 1]
-            word.start = prev.end + 0.05
-            word.end = word.start + 0.3
+        # If no match found, estimate from previous word
+        if not found:
+            if word_idx > 0:
+                prev = words[word_idx - 1]
+                word.start = prev.end + 0.05
+                word.end = word.start + 0.3
+            # Don't advance ts_idx - keep looking from same position
 
     return words
 
@@ -928,11 +933,13 @@ def concatenate_with_hook(
     main_video: str,
     output_path: str,
     audio_path: str = None,
+    hook_duration: float = 0,
+    freeze_duration: float = 0,
     gpu: str = None
 ):
     """
     Concatenate hook + freeze + main video.
-    Audio from main video is replaced with full audio file.
+    Audio is delayed by hook+freeze duration so it starts with main content.
     """
     print(f"\nConcatenating hook + freeze + main...")
 
@@ -958,7 +965,7 @@ def concatenate_with_hook(
     ]
     subprocess.run(cmd, capture_output=True)
 
-    # Second pass: add audio
+    # Second pass: add audio with delay for hook+freeze
     codec_params = []
     if gpu == 'nvenc':
         codec_params = ['-c:v', 'h264_nvenc', '-preset', 'p4']
@@ -970,6 +977,10 @@ def concatenate_with_hook(
         codec_params = ['-c:v', 'libx264', '-preset', 'fast']
 
     if audio_path:
+        # Calculate audio delay (hook + freeze duration)
+        audio_delay_ms = int((hook_duration + freeze_duration) * 1000)
+        print(f"  Audio delay: {audio_delay_ms}ms")
+
         cmd = [
             ffmpeg, '-y',
             '-i', temp_concat,
@@ -977,8 +988,8 @@ def concatenate_with_hook(
             '-map', '0:v',
             '-map', '1:a',
             '-c:a', 'aac', '-b:a', '192k',
+            '-af', f'adelay={audio_delay_ms}|{audio_delay_ms}',  # delay audio
             *codec_params,
-            '-shortest',
             output_path
         ]
     else:
@@ -1097,7 +1108,9 @@ def create_styled_video(
     threads: int = 0,
     hook_video: str = None,
     hook_duration: float = 0,
-    freeze_duration: float = 3.0
+    freeze_duration: float = 3.0,
+    hook_as_bg: bool = False,
+    hook_intro: bool = False
 ):
     """Create video with styled subtitles and dynamic backgrounds."""
 
@@ -1147,6 +1160,208 @@ def create_styled_video(
 
     total_frames = int(duration * FPS)
 
+    # === HOOK INTRO MODE ===
+    # Hook plays with original audio, then freeze frame with subtitles page 1, then backgrounds
+    if hook_intro and hook_video and os.path.exists(hook_video) and threads > 1:
+        print(f"\n=== HOOK INTRO MODE ===")
+        temp_dir = tempfile.mkdtemp(prefix='hook_intro_')
+
+        try:
+            # Load hook video
+            hook_clip = VideoFileClip(hook_video)
+            hook_dur = hook_clip.duration
+            print(f"Hook video: {hook_dur:.1f}s")
+
+            # Get page 1 timing (subtitles for freeze frame)
+            page1_start, page1_end = page_times[0] if page_times else (0, 5)
+            page1_duration = page1_end - page1_start + 0.5  # Small buffer
+            print(f"Page 1: {page1_start:.2f}s - {page1_end:.2f}s (duration: {page1_duration:.1f}s)")
+
+            # Create darkened freeze frame from last hook frame
+            print(f"\nCreating freeze frame...")
+            last_frame = hook_clip.get_frame(hook_dur - 0.01)
+            # Darken the frame
+            darkened = (last_frame * (1 - darken)).astype(np.uint8)
+
+            # Render subtitles for page 0 on freeze frame
+            print(f"Rendering page 1 subtitles on freeze frame...")
+            freeze_frames_dir = os.path.join(temp_dir, 'freeze_frames')
+            os.makedirs(freeze_frames_dir, exist_ok=True)
+
+            # Only use page 0 for freeze frame
+            freeze_pages = [pages[0]]
+            page1_frames = int(page1_duration * FPS)
+
+            # Prepare darkened background image (resize to target resolution)
+            bg_pil = Image.fromarray(darkened).convert('RGBA')
+            bg_pil = bg_pil.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+
+            # Render freeze frames with subtitles
+            for frame_idx in range(page1_frames):
+                t = frame_idx / FPS
+                subtitle_frame = render_frame(t, freeze_pages, fonts)
+
+                # Combine darkened background with subtitle
+                sub_img = Image.fromarray(subtitle_frame)
+                combined = Image.alpha_composite(bg_pil.copy(), sub_img)
+
+                frame_path = os.path.join(freeze_frames_dir, f'frame_{frame_idx:06d}.png')
+                combined.save(frame_path)
+
+                if (frame_idx + 1) % 50 == 0 or frame_idx == page1_frames - 1:
+                    print(f"  Freeze frames: {frame_idx + 1}/{page1_frames}")
+
+            # Assemble freeze video with page 1 audio
+            freeze_video_path = os.path.join(temp_dir, 'freeze_with_subs.mp4')
+            page1_audio_path = os.path.join(temp_dir, 'page1_audio.mp3')
+
+            # Extract page 1 audio (0 to page1_end)
+            ffmpeg = get_ffmpeg_path()
+            cmd = [
+                ffmpeg, '-y',
+                '-i', audio_path,
+                '-ss', '0',
+                '-t', str(page1_duration),
+                '-c:a', 'libmp3lame', '-q:a', '2',
+                page1_audio_path
+            ]
+            subprocess.run(cmd, capture_output=True)
+
+            # Assemble freeze video
+            assemble_video_ffmpeg(
+                frames_dir=freeze_frames_dir,
+                audio_path=page1_audio_path,
+                output_path=freeze_video_path,
+                fps=FPS,
+                crf=23,
+                threads=threads,
+                gpu=gpu
+            )
+
+            # Now render main video (pages 2+) with backgrounds
+            print(f"\nRendering main video (pages 2+)...")
+            main_frames_dir = os.path.join(temp_dir, 'main_frames')
+            os.makedirs(main_frames_dir, exist_ok=True)
+
+            # Calculate timing - main video audio starts at page1_duration
+            main_start_time = page1_duration
+            main_duration = duration - main_start_time
+            main_total_frames = int(main_duration * FPS)
+
+            # Load backgrounds
+            bg_videos = []
+            if backgrounds_dir and os.path.exists(backgrounds_dir):
+                catalog = load_background_catalog(backgrounds_dir)
+                if catalog:
+                    print(f"Loaded {len(catalog)} backgrounds")
+                    for vid in catalog:
+                        if os.path.exists(vid['path']):
+                            bg_videos.append(vid['path'])
+
+            # Create page times for main video (offset by main_start_time)
+            # Skip page 0 since it's on freeze frame
+            main_page_times = [(max(0, s - main_start_time), max(0, e - main_start_time))
+                               for s, e in page_times[1:]]
+
+            # Extract background frames for main video
+            bg_frame_mapping = {}
+            if bg_videos and main_page_times:
+                bg_frame_mapping = extract_background_frames(
+                    bg_videos, main_page_times, main_frames_dir, main_total_frames, FPS, darken, desaturate
+                )
+
+            default_bg_color = (15, 15, 20, 255)
+
+            # Serialize only pages[1:] for main video (skip page 0 which is on freeze)
+            main_pages = pages[1:]
+            main_pages_data = serialize_pages(main_pages)
+
+            # Prepare tasks for main video rendering
+            tasks = []
+            for frame_idx in range(main_total_frames):
+                # Time in original audio timeline
+                t = main_start_time + frame_idx / FPS
+                frame_path = os.path.join(main_frames_dir, f'frame_{frame_idx:06d}.png')
+                bg_info = bg_frame_mapping.get(frame_idx, default_bg_color)
+                tasks.append((frame_idx, t, main_pages_data, FONT_PATH, frame_path, bg_info))
+
+            # Render main frames in parallel
+            completed = 0
+            with ProcessPoolExecutor(max_workers=threads) as executor:
+                futures = {executor.submit(render_frame_to_file, task): task[0] for task in tasks}
+                for future in as_completed(futures):
+                    completed += 1
+                    if completed % 100 == 0 or completed == main_total_frames:
+                        print(f"  Main frames: {completed}/{main_total_frames} ({100*completed/main_total_frames:.0f}%)")
+
+            # Extract main audio (from page1_end to end)
+            main_audio_path = os.path.join(temp_dir, 'main_audio.mp3')
+            cmd = [
+                ffmpeg, '-y',
+                '-i', audio_path,
+                '-ss', str(main_start_time),
+                '-c:a', 'libmp3lame', '-q:a', '2',
+                main_audio_path
+            ]
+            subprocess.run(cmd, capture_output=True)
+
+            # Assemble main video
+            main_video_path = os.path.join(temp_dir, 'main_with_subs.mp4')
+            assemble_video_ffmpeg(
+                frames_dir=main_frames_dir,
+                audio_path=main_audio_path,
+                output_path=main_video_path,
+                fps=FPS,
+                crf=23,
+                threads=threads,
+                gpu=gpu
+            )
+
+            # Final concatenation using moviepy for proper audio handling
+            print(f"\nConcatenating final video with moviepy...")
+
+            # Load all clips
+            hook_for_concat = VideoFileClip(hook_video)
+            # Resize hook to match our frame size
+            hook_for_concat = hook_for_concat.resized((WIDTH, HEIGHT))
+
+            freeze_for_concat = VideoFileClip(freeze_video_path)
+            main_for_concat = VideoFileClip(main_video_path)
+
+            print(f"  Hook: {hook_for_concat.duration:.1f}s (with original audio)")
+            print(f"  Freeze: {freeze_for_concat.duration:.1f}s (with TTS page 1)")
+            print(f"  Main: {main_for_concat.duration:.1f}s (with TTS rest)")
+
+            # Concatenate all clips
+            final = concatenate_videoclips([hook_for_concat, freeze_for_concat, main_for_concat])
+            print(f"  Final: {final.duration:.1f}s")
+
+            # Write final video
+            final.write_videofile(
+                output_path,
+                fps=FPS,
+                codec='libx264',
+                audio_codec='aac',
+                preset='fast',
+                threads=threads if threads > 0 else None
+            )
+
+            # Cleanup
+            hook_for_concat.close()
+            freeze_for_concat.close()
+            main_for_concat.close()
+            final.close()
+
+            print(f"\nDone! {output_path}")
+            hook_clip.close()
+            audio.close()
+            return
+
+        finally:
+            # Cleanup
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir, ignore_errors=True)
+
     # Parallel frame pre-rendering
     if threads > 1:
         print(f"\nPre-rendering {total_frames} frames with {threads} workers...")
@@ -1160,6 +1375,60 @@ def create_styled_video(
 
             # Load background videos for parallel rendering
             bg_videos = []
+
+            # If hook_as_bg, prepare hook+freeze as first background
+            hook_bg_path = None
+            if hook_as_bg and hook_video and os.path.exists(hook_video):
+                print(f"\nPreparing hook as first background...")
+                # Create combined hook+freeze video
+                hook_clip = VideoFileClip(hook_video)
+                hook_orig_dur = hook_clip.duration
+                use_hook_dur = hook_duration if hook_duration > 0 else hook_orig_dur
+                use_hook_dur = min(use_hook_dur, hook_orig_dur)
+
+                # Get first page duration to determine needed length
+                first_page_end = page_times[0][1] if page_times else 5.0
+                needed_duration = first_page_end + 0.5  # Small buffer
+
+                print(f"  Hook video: {hook_orig_dur:.1f}s, using: {use_hook_dur:.1f}s")
+                print(f"  First page ends at: {first_page_end:.1f}s")
+
+                # If hook is shorter than needed, we'll need freeze
+                if use_hook_dur < needed_duration:
+                    freeze_needed = needed_duration - use_hook_dur
+                    print(f"  Adding freeze frame: {freeze_needed:.1f}s")
+                else:
+                    freeze_needed = 0
+
+                # Trim hook to duration
+                if use_hook_dur < hook_orig_dur:
+                    hook_clip = hook_clip.subclipped(0, use_hook_dur)
+
+                # Create freeze frame if needed
+                if freeze_needed > 0:
+                    last_frame = hook_clip.get_frame(hook_clip.duration - 0.01)
+                    freeze_clip = ImageClip(last_frame).with_duration(freeze_needed + freeze_duration)
+                    # Concatenate hook + freeze
+                    combined = concatenate_videoclips([hook_clip, freeze_clip])
+                else:
+                    combined = hook_clip
+
+                # Save combined hook+freeze as first background
+                hook_bg_path = os.path.join(temp_dir, 'hook_as_bg.mp4')
+                combined.write_videofile(
+                    hook_bg_path,
+                    fps=FPS,
+                    codec='libx264',
+                    audio=False,
+                    preset='ultrafast',
+                    logger=None
+                )
+                combined.close()
+                hook_clip.close()
+
+                bg_videos.append(hook_bg_path)
+                print(f"  Hook background ready: {combined.duration:.1f}s total")
+
             if backgrounds_dir and os.path.exists(backgrounds_dir):
                 catalog = load_background_catalog(backgrounds_dir)
                 if catalog:
@@ -1169,7 +1438,7 @@ def create_styled_video(
                             bg_videos.append(vid['path'])
                             print(f"  - {vid['filename']}")
 
-            # Or use single background
+            # Or use single background (if no hook_as_bg and no catalog)
             if not bg_videos and background_path and os.path.exists(background_path):
                 bg_videos = [background_path]
                 print(f"\nUsing single background: {background_path}")
@@ -1205,8 +1474,8 @@ def create_styled_video(
             # Use ffmpeg directly for fast assembly
             print(f"\nAssembling video with ffmpeg...")
 
-            # If hook video, assemble main to temp, then concat
-            if hook_video and os.path.exists(hook_video):
+            # If hook video (prepend mode, not hook_as_bg), assemble main to temp, then concat
+            if hook_video and os.path.exists(hook_video) and not hook_as_bg:
                 main_video_path = os.path.join(temp_dir, 'main_video.mp4')
                 assemble_video_ffmpeg(
                     frames_dir=temp_dir,
@@ -1234,6 +1503,8 @@ def create_styled_video(
                     main_video=main_video_path,
                     output_path=output_path,
                     audio_path=audio_path,
+                    hook_duration=hook_duration if hook_duration > 0 else hook_total_dur - freeze_duration,
+                    freeze_duration=freeze_duration,
                     gpu=gpu
                 )
             else:
@@ -1402,6 +1673,10 @@ def main():
                         help="Duration of hook video to use (0=full video)")
     parser.add_argument("--freeze-duration", type=float, default=3.0,
                         help="Duration of freeze frame after hook (default: 3.0)")
+    parser.add_argument("--hook-as-bg", action="store_true",
+                        help="Use hook as first background (subtitles ON hook) instead of prepending")
+    parser.add_argument("--hook-intro", action="store_true",
+                        help="Hook plays with original audio, then freeze frame with subtitles page 1, then backgrounds")
     args = parser.parse_args()
 
     # Defaults
@@ -1430,7 +1705,9 @@ def main():
         threads=args.threads,
         hook_video=args.hook_video,
         hook_duration=args.hook_duration,
-        freeze_duration=args.freeze_duration
+        freeze_duration=args.freeze_duration,
+        hook_as_bg=args.hook_as_bg,
+        hook_intro=args.hook_intro
     )
 
 
