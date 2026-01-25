@@ -922,6 +922,168 @@ def get_gpu_codec(gpu_option: str, threads: int = 0) -> tuple:
         return 'libx264', params
 
 
+def concatenate_with_hook(
+    hook_clip: str,
+    freeze_clip: str,
+    main_video: str,
+    output_path: str,
+    audio_path: str = None,
+    gpu: str = None
+):
+    """
+    Concatenate hook + freeze + main video.
+    Audio from main video is replaced with full audio file.
+    """
+    print(f"\nConcatenating hook + freeze + main...")
+
+    ffmpeg = get_ffmpeg_path()
+    temp_dir = os.path.dirname(main_video)
+    concat_list = os.path.join(temp_dir, 'concat_list.txt')
+
+    # Create concat list file
+    with open(concat_list, 'w') as f:
+        f.write(f"file '{os.path.abspath(hook_clip)}'\n")
+        f.write(f"file '{os.path.abspath(freeze_clip)}'\n")
+        f.write(f"file '{os.path.abspath(main_video)}'\n")
+
+    # First pass: concat videos without audio
+    temp_concat = os.path.join(temp_dir, 'temp_concat.mp4')
+    cmd = [
+        ffmpeg, '-y',
+        '-f', 'concat', '-safe', '0',
+        '-i', concat_list,
+        '-c:v', 'copy',
+        '-an',  # no audio
+        temp_concat
+    ]
+    subprocess.run(cmd, capture_output=True)
+
+    # Second pass: add audio
+    codec_params = []
+    if gpu == 'nvenc':
+        codec_params = ['-c:v', 'h264_nvenc', '-preset', 'p4']
+    elif gpu == 'amd':
+        codec_params = ['-c:v', 'h264_amf']
+    elif gpu == 'intel':
+        codec_params = ['-c:v', 'h264_qsv']
+    else:
+        codec_params = ['-c:v', 'libx264', '-preset', 'fast']
+
+    if audio_path:
+        cmd = [
+            ffmpeg, '-y',
+            '-i', temp_concat,
+            '-i', audio_path,
+            '-map', '0:v',
+            '-map', '1:a',
+            '-c:a', 'aac', '-b:a', '192k',
+            *codec_params,
+            '-shortest',
+            output_path
+        ]
+    else:
+        cmd = [ffmpeg, '-y', '-i', temp_concat, '-c', 'copy', output_path]
+
+    subprocess.run(cmd, capture_output=True)
+
+    # Cleanup temp files
+    os.remove(concat_list)
+    os.remove(temp_concat)
+
+    print(f"  Created: {output_path}")
+
+
+def prepare_hook_video(
+    hook_path: str,
+    temp_dir: str,
+    hook_duration: float = 0,
+    freeze_duration: float = 3.0,
+    fps: int = 30
+) -> tuple:
+    """
+    Prepare hook video with freeze frame.
+    Returns (hook_clip_path, freeze_clip_path, total_hook_duration).
+    """
+    print(f"\nPreparing hook video: {hook_path}")
+
+    clip = VideoFileClip(hook_path)
+    original_duration = clip.duration
+
+    # Determine hook duration
+    if hook_duration <= 0 or hook_duration > original_duration:
+        use_duration = original_duration
+    else:
+        use_duration = hook_duration
+
+    print(f"  Original duration: {original_duration:.2f}s")
+    print(f"  Using duration: {use_duration:.2f}s")
+    print(f"  Freeze duration: {freeze_duration:.2f}s")
+
+    # Resize to 1080x1920 if needed
+    src_w, src_h = clip.size
+    target_ratio = WIDTH / HEIGHT
+    src_ratio = src_w / src_h
+
+    if abs(src_ratio - target_ratio) > 0.01 or src_w != WIDTH:
+        # Need to crop/resize
+        if src_ratio > target_ratio:
+            new_w = int(src_h * target_ratio)
+            x_offset = (src_w - new_w) // 2
+            clip = clip.cropped(x1=x_offset, x2=x_offset + new_w)
+        else:
+            new_h = int(src_w / target_ratio)
+            y_offset = (src_h - new_h) // 2
+            clip = clip.cropped(y1=y_offset, y2=y_offset + new_h)
+        clip = clip.resized((WIDTH, HEIGHT))
+
+    # Trim to hook duration
+    if use_duration < original_duration:
+        clip = clip.subclipped(0, use_duration)
+
+    # Save trimmed hook
+    hook_clip_path = os.path.join(temp_dir, 'hook_clip.mp4')
+    clip.write_videofile(
+        hook_clip_path,
+        fps=fps,
+        codec='libx264',
+        audio=False,
+        preset='fast',
+        logger=None
+    )
+
+    # Extract last frame for freeze
+    last_frame = clip.get_frame(clip.duration - 0.01)
+    clip.close()
+
+    # Create freeze frame video
+    freeze_clip_path = os.path.join(temp_dir, 'freeze_clip.mp4')
+    freeze_img = Image.fromarray(last_frame)
+
+    # Save freeze frames
+    freeze_frames_dir = os.path.join(temp_dir, 'freeze_frames')
+    os.makedirs(freeze_frames_dir, exist_ok=True)
+
+    total_freeze_frames = int(freeze_duration * fps)
+    for i in range(total_freeze_frames):
+        freeze_img.save(os.path.join(freeze_frames_dir, f'frame_{i:06d}.png'))
+
+    # Assemble freeze video with ffmpeg
+    ffmpeg_path = get_ffmpeg_path()
+    subprocess.run([
+        ffmpeg_path, '-y',
+        '-framerate', str(fps),
+        '-i', os.path.join(freeze_frames_dir, 'frame_%06d.png'),
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+        '-preset', 'fast',
+        freeze_clip_path
+    ], capture_output=True)
+
+    print(f"  Hook clip: {hook_clip_path}")
+    print(f"  Freeze clip: {freeze_clip_path}")
+
+    return hook_clip_path, freeze_clip_path, use_duration + freeze_duration
+
+
 def create_styled_video(
     script_path: str,
     audio_path: str,
@@ -932,7 +1094,10 @@ def create_styled_video(
     darken: float = BG_DARKEN,
     desaturate: float = BG_DESATURATE,
     gpu: str = None,
-    threads: int = 0
+    threads: int = 0,
+    hook_video: str = None,
+    hook_duration: float = 0,
+    freeze_duration: float = 3.0
 ):
     """Create video with styled subtitles and dynamic backgrounds."""
 
@@ -1039,15 +1204,48 @@ def create_styled_video(
 
             # Use ffmpeg directly for fast assembly
             print(f"\nAssembling video with ffmpeg...")
-            assemble_video_ffmpeg(
-                frames_dir=temp_dir,
-                audio_path=audio_path,
-                output_path=output_path,
-                fps=FPS,
-                crf=23,
-                threads=threads,
-                gpu=gpu
-            )
+
+            # If hook video, assemble main to temp, then concat
+            if hook_video and os.path.exists(hook_video):
+                main_video_path = os.path.join(temp_dir, 'main_video.mp4')
+                assemble_video_ffmpeg(
+                    frames_dir=temp_dir,
+                    audio_path=audio_path,
+                    output_path=main_video_path,
+                    fps=FPS,
+                    crf=23,
+                    threads=threads,
+                    gpu=gpu
+                )
+
+                # Prepare hook with freeze frame
+                hook_clip, freeze_clip, hook_total_dur = prepare_hook_video(
+                    hook_path=hook_video,
+                    temp_dir=temp_dir,
+                    hook_duration=hook_duration,
+                    freeze_duration=freeze_duration,
+                    fps=FPS
+                )
+
+                # Concatenate hook + freeze + main
+                concatenate_with_hook(
+                    hook_clip=hook_clip,
+                    freeze_clip=freeze_clip,
+                    main_video=main_video_path,
+                    output_path=output_path,
+                    audio_path=audio_path,
+                    gpu=gpu
+                )
+            else:
+                assemble_video_ffmpeg(
+                    frames_dir=temp_dir,
+                    audio_path=audio_path,
+                    output_path=output_path,
+                    fps=FPS,
+                    crf=23,
+                    threads=threads,
+                    gpu=gpu
+                )
 
             # Cleanup
             shutil.rmtree(temp_dir)
@@ -1199,6 +1397,11 @@ def main():
                         help="Use GPU encoding: nvenc (NVIDIA), amd, intel, or auto-detect")
     parser.add_argument("--threads", type=int, default=0,
                         help="CPU threads for encoding (0=auto, default: 0)")
+    parser.add_argument("--hook", dest="hook_video", help="Path to hook video (plays first)")
+    parser.add_argument("--hook-duration", type=float, default=0,
+                        help="Duration of hook video to use (0=full video)")
+    parser.add_argument("--freeze-duration", type=float, default=3.0,
+                        help="Duration of freeze frame after hook (default: 3.0)")
     args = parser.parse_args()
 
     # Defaults
@@ -1224,7 +1427,10 @@ def main():
         darken=args.darken,
         desaturate=args.desaturate,
         gpu=args.gpu,
-        threads=args.threads
+        threads=args.threads,
+        hook_video=args.hook_video,
+        hook_duration=args.hook_duration,
+        freeze_duration=args.freeze_duration
     )
 
 

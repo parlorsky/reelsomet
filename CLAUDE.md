@@ -63,6 +63,21 @@ python scripts/styled_subtitles.py script.txt audio.mp3 --threads 30 --gpu nvenc
 
 **Speed:** 60-sec video renders in ~30 seconds with `--threads 30`
 
+**Hook video (intro):**
+```bash
+# With hook video at the start
+python scripts/styled_subtitles.py script.txt audio.mp3 \
+    --hook downloads/hooks/my_hook.mp4 \
+    --hook-duration 3 \
+    --freeze-duration 3 \
+    --threads 30 -o output.mp4
+```
+
+Hook options:
+- `--hook PATH` - path to hook video (plays first, original quality)
+- `--hook-duration N` - seconds of hook to use (0=full video)
+- `--freeze-duration N` - freeze last frame duration (default: 3s)
+
 **Markup syntax:**
 - `**word**` - accent (110px, white, glow)
 - `*word*` - highlight (88px, yellow)
