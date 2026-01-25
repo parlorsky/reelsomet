@@ -90,11 +90,11 @@ IMAGE_CORNER_RADIUS = 16  # Rounded corners
 IMAGE_SHADOW_OFFSET = 6  # Shadow offset
 IMAGE_SHADOW_BLUR = 12  # Shadow blur radius
 
-# Pop drift effect settings
-POP_DURATION = 0.18  # Duration of pop-in animation (fast!)
-POP_OVERSHOOT = 1.08  # Scale overshoot (108%)
-DRIFT_SPEED = 0.002  # Zoom speed per frame (0.2% per frame)
-FADE_OUT_DURATION = 0.12  # Quick fade out
+# Pop effect settings (no drift - static after pop-in)
+POP_DURATION = 0.20  # Duration of pop-in animation
+POP_OVERSHOOT = 1.05  # Scale overshoot (105%) - subtle bounce
+DRIFT_SPEED = 0.0  # No zoom drift (was 0.002)
+FADE_OUT_DURATION = 0.15  # Fade out duration
 
 # Named colors - VIBRANT palette for Reels
 COLOR_MAP = {
