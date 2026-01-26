@@ -11,10 +11,13 @@ import os
 import sys
 import json
 import argparse
+import subprocess
+import tempfile
 from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
 import httpx
+import imageio_ffmpeg
 
 # Fix Windows console encoding
 if sys.platform == 'win32':
@@ -22,14 +25,57 @@ if sys.platform == 'win32':
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
+# Speed factor for better Whisper accuracy
+SPEED_FACTOR = 1.15
 
-def extract_word_timestamps(audio_path: str, language: str = "ru") -> list[dict]:
+
+def speed_up_audio(audio_path: str, speed: float = SPEED_FACTOR) -> str:
+    """
+    Speed up audio file using ffmpeg.
+
+    Args:
+        audio_path: Path to original audio
+        speed: Speed multiplier (1.15 = 15% faster)
+
+    Returns:
+        Path to temporary sped-up audio file
+    """
+    # Create temp file with same extension
+    suffix = Path(audio_path).suffix
+    temp_file = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    temp_path = temp_file.name
+    temp_file.close()
+
+    # Use ffmpeg atempo filter (supports 0.5 to 2.0)
+    ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+    cmd = [
+        ffmpeg_path, "-y", "-i", audio_path,
+        "-filter:a", f"atempo={speed}",
+        "-vn", temp_path
+    ]
+
+    print(f"Speeding up audio {speed}x for better accuracy...")
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    if result.returncode != 0:
+        print(f"Warning: ffmpeg speedup failed, using original audio")
+        os.unlink(temp_path)
+        return None
+
+    return temp_path
+
+
+def extract_word_timestamps(audio_path: str, language: str = "ru", speed_factor: float = SPEED_FACTOR) -> list[dict]:
     """
     Extract word-level timestamps from audio using Whisper API.
+
+    Audio is sped up by speed_factor before processing for better accuracy,
+    then timestamps are adjusted back to original timing.
 
     Args:
         audio_path: Path to audio file (mp3, wav, etc.)
         language: Language code (ru, en, etc.)
+        speed_factor: Speed multiplier for preprocessing (default: 1.15)
 
     Returns:
         List of {word, start, end} dicts
@@ -40,25 +86,45 @@ def extract_word_timestamps(audio_path: str, language: str = "ru") -> list[dict]
 
     print(f"Processing: {audio_path}")
 
-    with open(audio_path, "rb") as audio_file:
-        # Use verbose_json response format with word timestamps
-        response = client.audio.transcriptions.create(
-            model="whisper-1",
-            file=audio_file,
-            language=language,
-            response_format="verbose_json",
-            timestamp_granularities=["word"]
-        )
+    # Speed up audio for better Whisper accuracy
+    temp_audio = None
+    process_path = audio_path
 
-    # Extract word-level timestamps
+    if speed_factor != 1.0:
+        temp_audio = speed_up_audio(audio_path, speed_factor)
+        if temp_audio:
+            process_path = temp_audio
+
+    try:
+        with open(process_path, "rb") as audio_file:
+            # Use verbose_json response format with word timestamps
+            response = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                language=language,
+                response_format="verbose_json",
+                timestamp_granularities=["word"]
+            )
+    finally:
+        # Clean up temp file
+        if temp_audio and os.path.exists(temp_audio):
+            os.unlink(temp_audio)
+
+    # Extract word-level timestamps and adjust back to original timing
     words = []
     if hasattr(response, 'words') and response.words:
         for w in response.words:
+            # Multiply timestamps by speed_factor to get original timing
+            start = w.start * speed_factor if temp_audio else w.start
+            end = w.end * speed_factor if temp_audio else w.end
             words.append({
                 "word": w.word.strip(),
-                "start": round(w.start, 3),
-                "end": round(w.end, 3)
+                "start": round(start, 3),
+                "end": round(end, 3)
             })
+
+    if temp_audio:
+        print(f"Timestamps adjusted back from {speed_factor}x speed")
 
     return words, response.text
 
@@ -88,6 +154,8 @@ def main():
     parser.add_argument("-o", "--output", help="Output JSON file (default: same name + _timestamps.json)")
     parser.add_argument("-l", "--lang", default="ru", help="Language code (ru, en, etc.)")
     parser.add_argument("--preview", type=int, default=15, help="Number of words to preview")
+    parser.add_argument("--speed", type=float, default=SPEED_FACTOR,
+                        help=f"Speed factor for preprocessing (default: {SPEED_FACTOR}, use 1.0 to disable)")
     args = parser.parse_args()
 
     # Default output path
@@ -96,7 +164,7 @@ def main():
         args.output = str(audio_path.parent / f"{audio_path.stem}_timestamps.json")
 
     # Extract timestamps
-    words, full_text = extract_word_timestamps(args.audio, args.lang)
+    words, full_text = extract_word_timestamps(args.audio, args.lang, args.speed)
 
     if not words:
         print("Warning: No word timestamps returned. Check audio quality.")

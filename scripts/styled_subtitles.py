@@ -810,21 +810,28 @@ def render_image_pop_drift(img: Image.Image, t: float, start: float, end: float,
 def prepare_images_for_pages(images: List[ImageOverlay], page_times: List[Tuple[float, float]],
                              script_dir: str) -> List[ImageOverlay]:
     """Load images and assign timing based on page times."""
-    images_dir = os.path.join(script_dir, 'images')
+    # Get project root (parent of script_dir or where input/ is)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     for img_overlay in images:
         # Find image file
         if os.path.isabs(img_overlay.filename):
             image_path = img_overlay.filename
         else:
-            # Check in script's images directory first
-            image_path = os.path.join(images_dir, img_overlay.filename)
-            if not os.path.exists(image_path):
-                # Check in downloads/images
-                image_path = os.path.join(os.path.dirname(script_dir), 'downloads', 'images', img_overlay.filename)
-            if not os.path.exists(image_path):
-                # Check in input/images
-                image_path = os.path.join(script_dir, img_overlay.filename)
+            image_path = None
+            # Search paths in priority order
+            search_paths = [
+                os.path.join(project_root, 'input', 'images', img_overlay.filename),
+                os.path.join(script_dir, 'images', img_overlay.filename),
+                os.path.join(script_dir, img_overlay.filename),
+                os.path.join(project_root, 'downloads', 'images', img_overlay.filename),
+            ]
+            for path in search_paths:
+                if os.path.exists(path):
+                    image_path = path
+                    break
+            if not image_path:
+                image_path = search_paths[0]  # Default for error message
 
         # Load and prepare image
         img = load_and_prepare_image(image_path)
