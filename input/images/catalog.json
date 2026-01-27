@@ -1,0 +1,56 @@
+{
+  "version": "1.0",
+  "description": "Каталог изображений для overlay в видео",
+  "types": ["book_cover", "illustration", "screenshot", "meme", "art"],
+  "effects": ["pop", "slide_left", "slide_right"],
+  "images": [
+    {
+      "filename": "attached_love.jpg",
+      "type": "book_cover",
+      "title": "Attached — Амир Левин",
+      "tags": ["привязанность", "психология", "отношения", "тревожность"],
+      "mood": ["vulnerable", "reflective"],
+      "default_effect": "pop"
+    },
+    {
+      "filename": "chapman_5_love_languages.jpg",
+      "type": "book_cover",
+      "title": "5 языков любви — Гэри Чепмен",
+      "tags": ["языки любви", "коммуникация", "отношения", "подарки"],
+      "mood": ["warm", "practical"],
+      "default_effect": "pop"
+    },
+    {
+      "filename": "fromm_art_of_loving.jpg",
+      "type": "book_cover",
+      "title": "Искусство любить — Эрих Фромм",
+      "tags": ["любовь", "философия", "свобода", "страх"],
+      "mood": ["philosophical", "deep"],
+      "default_effect": "pop"
+    },
+    {
+      "filename": "fromm_art_of_loving_new.jpg",
+      "type": "book_cover",
+      "title": "Искусство любить — Эрих Фромм (альт. обложка)",
+      "tags": ["любовь", "философия", "свобода", "страх"],
+      "mood": ["philosophical", "deep"],
+      "default_effect": "pop"
+    },
+    {
+      "filename": "gottman_seven_principles.jpg",
+      "type": "book_cover",
+      "title": "7 принципов брака — Джон Готтман",
+      "tags": ["брак", "коммуникация", "конфликты", "телепатия"],
+      "mood": ["reflective", "practical"],
+      "default_effect": "pop"
+    },
+    {
+      "filename": "perel_mating_captivity.jpg",
+      "type": "book_cover",
+      "title": "Mating in Captivity — Эстер Перель",
+      "tags": ["близость", "присутствие", "страсть", "рутина"],
+      "mood": ["sensual", "thoughtful"],
+      "default_effect": "pop"
+    }
+  ]
+}

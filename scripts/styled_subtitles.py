@@ -8,7 +8,9 @@ Styled Subtitles - Word-by-word subtitles with custom styling markup
     [c:FF5500]слово[/]  - явный цвет (hex без #)
     [s:120]слово[/]     - явный размер (px)
     [c:red,s:80]слово[/] - комбинация
-    [img:filename.jpg]  - вставка изображения с эффектом pop_drift
+    [img:filename.jpg]  - вставка изображения с эффектом pop (default)
+    [img:filename.jpg:slide_left]  - вставка с эффектом slide слева
+    [img:filename.jpg:slide_right] - вставка с эффектом slide справа
     ---                 - новая страница (очистка экрана)
 
 Цвета по имени: red, green, blue, yellow, orange, purple, pink, white, gray
@@ -95,6 +97,8 @@ POP_DURATION = 0.20  # Duration of pop-in animation
 POP_OVERSHOOT = 1.05  # Scale overshoot (105%) - subtle bounce
 DRIFT_SPEED = 0.0  # No zoom drift (was 0.002)
 FADE_OUT_DURATION = 0.15  # Fade out duration
+SLIDE_DURATION = 0.35  # Duration of slide-in animation
+VALID_EFFECTS = {'pop', 'slide_left', 'slide_right'}
 
 # Named colors - VIBRANT palette for Reels
 COLOR_MAP = {
@@ -139,6 +143,7 @@ class ImageOverlay:
     """An image overlay with timing and effect information."""
     filename: str  # Image filename (relative to images/ or absolute)
     page_idx: int = 0  # Which page this image belongs to
+    effect: str = "pop"  # Animation effect: pop, slide_left, slide_right
 
     # Timing (filled from page timing)
     start: float = 0.0
@@ -190,7 +195,8 @@ def parse_styled_text(text: str) -> Tuple[List[StyledWord], List[ImageOverlay]]:
         [c:color]word[/] - custom color
         [s:size]word[/]  - custom size
         [c:color,s:size]word[/] - combo
-        [img:filename.jpg] - image overlay
+        [img:filename.jpg] - image overlay (pop effect)
+        [img:filename.jpg:effect] - image with effect (pop/slide_left/slide_right)
         ---      - page break
     """
     words = []
@@ -234,12 +240,21 @@ def parse_styled_text(text: str) -> Tuple[List[StyledWord], List[ImageOverlay]]:
 
             word = None
 
-            # [img:filename]
+            # [img:filename] or [img:filename:effect]
             if token.startswith('[img:') and token.endswith(']'):
-                filename = token[5:-1].strip()
+                img_content = token[5:-1].strip()
+                # Parse optional effect: [img:file.jpg:slide_left]
+                parts = img_content.rsplit(':', 1)
+                if len(parts) == 2 and parts[1] in VALID_EFFECTS:
+                    filename = parts[0].strip()
+                    effect = parts[1].strip()
+                else:
+                    filename = img_content
+                    effect = "pop"
                 images.append(ImageOverlay(
                     filename=filename,
-                    page_idx=current_page_idx
+                    page_idx=current_page_idx,
+                    effect=effect
                 ))
                 continue  # Don't add as word
 
@@ -578,6 +593,7 @@ def render_frame_to_file(args):
             img_overlay = ImageOverlay(
                 filename=img_data['filename'],
                 page_idx=img_data['page_idx'],
+                effect=img_data.get('effect', 'pop'),
                 start=img_data['start'],
                 end=img_data['end'],
                 x=img_data['x'],
@@ -650,6 +666,7 @@ def serialize_images(images: List['ImageOverlay'], temp_dir: str) -> List[dict]:
         result.append({
             'filename': img.filename,
             'page_idx': img.page_idx,
+            'effect': img.effect,
             'start': img.start,
             'end': img.end,
             'x': img.x,
@@ -805,6 +822,82 @@ def render_image_pop_drift(img: Image.Image, t: float, start: float, end: float,
     y = int(center_y - new_height / 2)
 
     return scaled, x, y
+
+
+def ease_out_cubic(t: float) -> float:
+    """Cubic ease-out for smooth deceleration."""
+    return 1 - pow(1 - t, 3)
+
+
+def render_image_slide(img: Image.Image, t: float, start: float, end: float,
+                       center_x: float, center_y: float,
+                       direction: str = "left") -> Optional[Tuple[Image.Image, int, int]]:
+    """
+    Render image with slide effect.
+    Returns (processed_image, x, y) or None if not visible.
+
+    Effect:
+    - Slide in from left/right edge to center (SLIDE_DURATION)
+    - Static while page is visible
+    - Fade out at page end (FADE_OUT_DURATION)
+    """
+    if t < start or t > end + FADE_OUT_DURATION:
+        return None
+
+    time_in = t - start
+    alpha = 255
+
+    # Calculate X offset for slide
+    if direction == "left":
+        off_screen_x = -img.width  # Start fully off-screen left
+    else:
+        off_screen_x = WIDTH + img.width  # Start fully off-screen right
+
+    target_x = int(center_x - img.width / 2)
+
+    # Phase 1: Slide in (0 to SLIDE_DURATION)
+    if time_in < SLIDE_DURATION:
+        progress = time_in / SLIDE_DURATION
+        eased = ease_out_cubic(progress)
+        x = int(off_screen_x + (target_x - off_screen_x) * eased)
+        alpha = min(255, int(255 * progress * 3))  # Quick fade in
+
+    # Phase 2: Static (SLIDE_DURATION to end)
+    elif t <= end:
+        x = target_x
+
+    # Phase 3: Fade out (end to end + FADE_OUT_DURATION)
+    else:
+        fade_progress = (t - end) / FADE_OUT_DURATION
+        x = target_x
+        alpha = int(255 * (1 - fade_progress))
+
+    if alpha <= 0:
+        return None
+
+    y = int(center_y - img.height / 2)
+
+    # Apply alpha
+    if alpha < 255:
+        result = img.copy()
+        r, g, b, a = result.split()
+        a = a.point(lambda v: int(v * alpha / 255))
+        result = Image.merge('RGBA', (r, g, b, a))
+        return result, x, y
+
+    return img, x, y
+
+
+def render_image_effect(img: Image.Image, t: float, start: float, end: float,
+                        center_x: float, center_y: float,
+                        effect: str = "pop") -> Optional[Tuple[Image.Image, int, int]]:
+    """Dispatch to the correct render function based on effect type."""
+    if effect == "slide_left":
+        return render_image_slide(img, t, start, end, center_x, center_y, direction="left")
+    elif effect == "slide_right":
+        return render_image_slide(img, t, start, end, center_x, center_y, direction="right")
+    else:  # pop (default)
+        return render_image_pop_drift(img, t, start, end, center_x, center_y)
 
 
 def prepare_images_for_pages(images: List[ImageOverlay], page_times: List[Tuple[float, float]],
@@ -1018,10 +1111,11 @@ def render_frame(t: float, pages: List[List[StyledWord]], fonts: dict,
         for img_overlay in images:
             if img_overlay._image is None:
                 continue
-            result = render_image_pop_drift(
+            result = render_image_effect(
                 img_overlay._image, t,
                 img_overlay.start, img_overlay.end,
-                img_overlay.x, img_overlay.y
+                img_overlay.x, img_overlay.y,
+                img_overlay.effect
             )
             if result:
                 rendered_img, x, y = result
