@@ -2090,97 +2090,6 @@
       "path": "input/backgrounds/pinterest_new_1113022495429159158.mp4"
     },
     {
-      "filename": "pinterest_new_197665871146247147.fV_HLSV3_MOBILE-803.mp4",
-      "technical": {
-        "duration": 36.3,
-        "resolution": "612x1088",
-        "fps": 30,
-        "aspect_ratio": "9:16"
-      },
-      "visual": {
-        "brightness": "dark",
-        "dominant_colors": [
-          "dark_red",
-          "pink",
-          "purple",
-          "black"
-        ],
-        "contrast": "high",
-        "saturation": "high",
-        "motion_speed": "slow",
-        "text_friendly": false
-      },
-      "semantic": {
-        "style": "abstract_3d",
-        "mood": [
-          "mysterious",
-          "organic",
-          "surreal",
-          "hypnotic"
-        ],
-        "elements": [
-          "jellyfish",
-          "organic_form",
-          "flowing",
-          "underwater",
-          "creature"
-        ],
-        "themes": [
-          "biology",
-          "life",
-          "transformation",
-          "mystery"
-        ],
-        "setting": "dark_void",
-        "time_of_day": "undefined"
-      },
-      "keywords_ru": [
-        "медуза",
-        "абстракция",
-        "органика",
-        "форма",
-        "трансформация",
-        "сюрреализм"
-      ],
-      "keywords_en": [
-        "jellyfish",
-        "abstract",
-        "organic",
-        "form",
-        "transformation",
-        "surreal"
-      ],
-      "best_for": [
-        "абстракция",
-        "трансформация",
-        "внутренний мир",
-        "подсознание"
-      ],
-      "timeline": [
-        {
-          "t": 0,
-          "desc": "Розово-фиолетовая органическая форма на чёрном фоне, напоминает медузу или цветок"
-        },
-        {
-          "t": 10,
-          "desc": "Форма трансформируется, раскрываются лепестки, видна внутренняя структура"
-        },
-        {
-          "t": 18,
-          "desc": "Красно-розовые тона, форма пульсирует и меняет очертания"
-        },
-        {
-          "t": 25,
-          "desc": "Появляются жёлтые и голубые элементы, мозговидная структура"
-        },
-        {
-          "t": 36,
-          "desc": "Финал - форма продолжает медленно вращаться"
-        }
-      ],
-      "path": "input/backgrounds/pinterest_new_197665871146247147.fV_HLSV3_MOBILE-803.mp4"
-    },
-    {
       "filename": "pinterest_new_251568329179041862.mp4",
       "technical": {
         "duration": 58.9,
@@ -2941,98 +2850,6 @@
       "path": "input/backgrounds/pinterest_new_670966044484158050.mp4"
     },
     {
-      "filename": "pinterest_new_683562049714786120.mp4",
-      "technical": {
-        "duration": 20.4,
-        "resolution": "234x416",
-        "fps": 30,
-        "aspect_ratio": "9:16"
-      },
-      "visual": {
-        "brightness": "warm",
-        "dominant_colors": [
-          "green",
-          "gold",
-          "pink",
-          "warm_brown"
-        ],
-        "contrast": "medium",
-        "saturation": "high",
-        "motion_speed": "very_slow",
-        "text_friendly": false
-      },
-      "semantic": {
-        "style": "cinematic_3d",
-        "mood": [
-          "melancholic",
-          "poetic",
-          "peaceful",
-          "bittersweet"
-        ],
-        "elements": [
-          "skeleton",
-          "tree",
-          "flowers",
-          "sunflowers",
-          "garden",
-          "sitting"
-        ],
-        "themes": [
-          "death_and_beauty",
-          "memory",
-          "time",
-          "rest",
-          "eternity"
-        ],
-        "setting": "flower_garden",
-        "time_of_day": "golden_hour"
-      },
-      "keywords_ru": [
-        "скелет",
-        "цветы",
-        "подсолнухи",
-        "дерево",
-        "вечность",
-        "покой",
-        "красота_и_смерть"
-      ],
-      "keywords_en": [
-        "skeleton",
-        "flowers",
-        "sunflowers",
-        "tree",
-        "eternity",
-        "rest",
-        "beauty_and_death"
-      ],
-      "best_for": [
-        "вечность",
-        "время",
-        "философия жизни и смерти",
-        "память"
-      ],
-      "timeline": [
-        {
-          "t": 0,
-          "desc": "3D скелет сидит под деревом в цветущем саду, подсолнухи и розовые цветы вокруг, тёплый свет"
-        },
-        {
-          "t": 7,
-          "desc": "Камера чуть смещается, солнечные блики через листья, спокойная атмосфера"
-        },
-        {
-          "t": 13,
-          "desc": "Скелет неподвижен, будто отдыхает вечным сном среди красоты"
-        },
-        {
-          "t": 20,
-          "desc": "Финал - мирная сцена, контраст смерти и цветущей жизни"
-        }
-      ],
-      "note": "Low resolution (234x416), may need upscaling",
-      "path": "input/backgrounds/pinterest_new_683562049714786120.mp4"
-    },
-    {
       "filename": "pinterest_new_713398397231718795.mp4",
       "technical": {
         "duration": 26.0,
@@ -3612,7 +3429,6 @@
       "pinterest_48624870973153103.mp4",
       "pinterest_new_109704940921189179.fV_HLSV3_MOBILE-1831.mp4",
       "pinterest_new_1008595279035010569.fV_HLSV3_MOBILE-538.mp4",
-      "pinterest_new_683562049714786120.mp4",
       "pinterest_new_836402962079694515.fV_HLSV3_MOBILE-1181.mp4",
       "pinterest_new_899664463177143372.mp4",
       "pinterest_new_942519028263550891.fV_HLSV3_MOBILE-720.mp4"
@@ -3695,7 +3511,6 @@
     "poetic": [
       "pinterest_new_109704940921189179.fV_HLSV3_MOBILE-1831.mp4",
       "pinterest_new_71353975342941705.mp4",
-      "pinterest_new_683562049714786120.mp4",
       "pinterest_new_899664463177143372.mp4"
     ],
     "peaceful": [
@@ -3705,7 +3520,6 @@
       "pinterest_new_598064025542819945.fV_HLSV3_MOBILE-843.mp4",
       "pinterest_new_635429828710300501.fV_HLSV3_MOBILE-603.mp4",
       "pinterest_new_665618019968463969.fV_HLSV3_MOBILE-1494.mp4",
-      "pinterest_new_683562049714786120.mp4",
       "pinterest_new_713398397231718795.mp4",
       "pinterest_new_899664463177143372.mp4"
     ],
@@ -3794,20 +3608,6 @@
     "majestic": [
       "pinterest_new_1041668588824748116.fV_HLSV3_MOBILE-2638.mp4"
     ],
-    "mysterious": [
-      "pinterest_new_197665871146247147.fV_HLSV3_MOBILE-803.mp4",
-      "pinterest_new_670966044484158050.mp4",
-      "pinterest_new_934004410228900122.fV_HLSV3_MOBILE-408.mp4"
-    ],
-    "organic": [
-      "pinterest_new_197665871146247147.fV_HLSV3_MOBILE-803.mp4"
-    ],
-    "surreal": [
-      "pinterest_new_197665871146247147.fV_HLSV3_MOBILE-803.mp4"
-    ],
-    "hypnotic": [
-      "pinterest_new_197665871146247147.fV_HLSV3_MOBILE-803.mp4"
-    ],
     "creative": [
       "pinterest_new_251568329179041862.mp4"
     ],
@@ -3832,12 +3632,13 @@
     "free": [
       "pinterest_new_665618019968463969.fV_HLSV3_MOBILE-1494.mp4"
     ],
+    "mysterious": [
+      "pinterest_new_670966044484158050.mp4",
+      "pinterest_new_934004410228900122.fV_HLSV3_MOBILE-408.mp4"
+    ],
     "vast": [
       "pinterest_new_670966044484158050.mp4",
       "pinterest_new_737323770281870255.fV_HLSV3_MOBILE-1472.mp4"
-    ],
-    "bittersweet": [
-      "pinterest_new_683562049714786120.mp4"
     ],
     "awe": [
       "pinterest_new_737323770281870255.fV_HLSV3_MOBILE-1472.mp4"
@@ -3945,45 +3746,51 @@
       "pinterest_161848180356130394.mp4",
       "pinterest_6192518232549059.mp4",
       "pinterest_new_42995371468635177.fV_HLSV3_MOBILE-1150.mp4",
-      "pinterest_new_1113022495429159158.mp4",
       "pinterest_new_251568329179041862.mp4",
       "pinterest_new_635429828710300501.fV_HLSV3_MOBILE-603.mp4",
       "pinterest_new_713398397231718795.mp4",
       "pinterest_new_942519028263550891.fV_HLSV3_MOBILE-720.mp4"
     ],
-    "fantasy": [
-      "pinterest_48624870973153103.mp4",
+    "fantasy_3d": [
+      "pinterest_48624870973153103.mp4"
+    ],
+    "cyberpunk_pixel_art": [
+      "pinterest_58687601390694374.mp4"
+    ],
+    "cinematic_fantasy": [
       "pinterest_new_109704940921189179.fV_HLSV3_MOBILE-1831.mp4",
       "pinterest_new_71353975342941705.mp4",
       "pinterest_new_8514686791397544.fV_HLSV3_MOBILE-1036.mp4",
       "pinterest_new_899664463177102610.mp4",
       "pinterest_new_899664463177143372.mp4"
     ],
-    "cyberpunk": [
-      "pinterest_58687601390694374.mp4"
-    ],
-    "aesthetic": [
+    "aesthetic_real": [
       "pinterest_new_930767447964372246.mp4",
       "pinterest_new_983473637372196602.mp4",
       "pinterest_new_934004410228900122.fV_HLSV3_MOBILE-408.mp4"
     ],
-    "cinematic": [
+    "cinematic_real": [
       "pinterest_new_1008595279035010569.fV_HLSV3_MOBILE-538.mp4",
-      "pinterest_new_627478160619432167.fV_HLSV3_MOBILE-2140.mp4",
       "pinterest_new_665618019968463969.fV_HLSV3_MOBILE-1494.mp4",
       "pinterest_new_836402962079694515.fV_HLSV3_MOBILE-1181.mp4"
     ],
-    "nature": [
+    "cinematic_nature": [
       "pinterest_new_1041668588824748116.fV_HLSV3_MOBILE-2638.mp4",
       "pinterest_new_598064025542819945.fV_HLSV3_MOBILE-843.mp4",
-      "pinterest_new_612278511871859158.fV_HLSV3_MOBILE-1770.mp4",
+      "pinterest_new_612278511871859158.fV_HLSV3_MOBILE-1770.mp4"
+    ],
+    "cartoon": [
+      "pinterest_new_1113022495429159158.mp4"
+    ],
+    "cinematic_dreamy": [
+      "pinterest_new_627478160619432167.fV_HLSV3_MOBILE-2140.mp4"
+    ],
+    "cinematic_3d": [
+      "pinterest_new_628322585550087184.mp4"
+    ],
+    "cinematic_aerial": [
       "pinterest_new_670966044484158050.mp4",
       "pinterest_new_737323770281870255.fV_HLSV3_MOBILE-1472.mp4"
-    ],
-    "3d_abstract": [
-      "pinterest_new_197665871146247147.fV_HLSV3_MOBILE-803.mp4",
-      "pinterest_new_628322585550087184.mp4",
-      "pinterest_new_683562049714786120.mp4"
     ]
   },
   "keyword_mapping": {
@@ -4127,13 +3934,11 @@
       "pinterest_new_71353975342941705.mp4",
       "pinterest_new_1113022495429159158.mp4",
       "pinterest_new_598064025542819945.fV_HLSV3_MOBILE-843.mp4",
-      "pinterest_new_683562049714786120.mp4",
       "pinterest_new_899664463177143372.mp4"
     ],
     "цветы": [
       "pinterest_new_71353975342941705.mp4",
       "pinterest_new_612278511871859158.fV_HLSV3_MOBILE-1770.mp4",
-      "pinterest_new_683562049714786120.mp4",
       "pinterest_new_899664463177143372.mp4"
     ],
     "ромашки": [
@@ -4271,24 +4076,6 @@
     "луна": [
       "pinterest_new_1113022495429159158.mp4"
     ],
-    "медуза": [
-      "pinterest_new_197665871146247147.fV_HLSV3_MOBILE-803.mp4"
-    ],
-    "абстракция": [
-      "pinterest_new_197665871146247147.fV_HLSV3_MOBILE-803.mp4"
-    ],
-    "органика": [
-      "pinterest_new_197665871146247147.fV_HLSV3_MOBILE-803.mp4"
-    ],
-    "форма": [
-      "pinterest_new_197665871146247147.fV_HLSV3_MOBILE-803.mp4"
-    ],
-    "трансформация": [
-      "pinterest_new_197665871146247147.fV_HLSV3_MOBILE-803.mp4"
-    ],
-    "сюрреализм": [
-      "pinterest_new_197665871146247147.fV_HLSV3_MOBILE-803.mp4"
-    ],
     "комната": [
       "pinterest_new_251568329179041862.mp4"
     ],
@@ -4383,21 +4170,6 @@
     ],
     "вид сверху": [
       "pinterest_new_670966044484158050.mp4"
-    ],
-    "скелет": [
-      "pinterest_new_683562049714786120.mp4"
-    ],
-    "подсолнухи": [
-      "pinterest_new_683562049714786120.mp4"
-    ],
-    "дерево": [
-      "pinterest_new_683562049714786120.mp4"
-    ],
-    "вечность": [
-      "pinterest_new_683562049714786120.mp4"
-    ],
-    "красота_и_смерть": [
-      "pinterest_new_683562049714786120.mp4"
     ],
     "зонт": [
       "pinterest_new_713398397231718795.mp4"
