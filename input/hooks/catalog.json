@@ -1,0 +1,19 @@
+{
+  "hooks": [
+    {
+      "id": "bloom_sad_girl",
+      "filename": "bloom_sad_girl.mp4",
+      "duration": 16.55,
+      "resolution": "720x1280",
+      "hook_text": "она 10/10, но в детстве в 4 года её изнасиловали",
+      "hook_duration": 5.0,
+      "mood": ["sad", "reflective", "meme", "relatable"],
+      "suitable_for": ["relationships", "loneliness", "childhood", "self_worth"],
+      "has_builtin_subtitles": true,
+      "source_url": "https://www.instagram.com/p/DT5DrqGjCFd/",
+      "usable_segment": {"start": 0, "end": 5.0, "note": "только хук с парой"},
+      "freeze_frame_time": 3.0,
+      "tags": ["couple", "girl", "boy", "sad", "purple", "relationship", "10/10", "meme", "penguin"]
+    }
+  ]
+}
