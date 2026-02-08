@@ -62,12 +62,23 @@ downloads/**/*.wav
 downloads/**/*.jpg
 downloads/**/*.png
 
-# But keep these in downloads
+# But keep fonts in downloads
 !downloads/fonts/
 !downloads/fonts/**
-!downloads/**/catalog.json
-!downloads/**/*.json
-!downloads/**/*.txt
+
+# Generated content (markup, timestamps, tts input)
+downloads/bloom_*_markup.txt
+downloads/bloom_*_timestamps.json
+downloads/bloom_*_tts_input.txt
+downloads/bloom_*_audio_timestamps.json
+downloads/bloom_*_tts.txt
+downloads/bloom_*_Callum_timestamps.json
+downloads/test_*.txt
+downloads/output/
+downloads/youtube/
+downloads/hooks/*.md
+downloads/backgrounds/catalog.json
+downloads/backgrounds/preview_*/
 
 # Claude
 .claude/
