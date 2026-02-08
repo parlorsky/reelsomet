@@ -1291,6 +1291,929 @@ def assemble_video_ffmpeg(
     return output_path
 
 
+def _create_marker_icon(size=72):
+    """Create a light bulb emoji PNG for timeline CTA marker."""
+    import tempfile
+    from PIL import Image, ImageDraw, ImageFont
+
+    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    rendered = False
+    for font_path in [r"C:\Windows\Fonts\seguiemj.ttf",
+                      "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"]:
+        try:
+            font = ImageFont.truetype(font_path, int(size * 0.85))
+            bbox = font.getbbox("\U0001F4A1")  # 💡
+            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            x = (size - tw) // 2
+            y = (size - th) // 2 - bbox[1]
+            draw.text((x, y), "\U0001F4A1", font=font, embedded_color=True)
+            rendered = True
+            break
+        except Exception:
+            continue
+
+    if not rendered:
+        # Fallback: yellow circle with bulb shape
+        cx, cy = size // 2, size // 2
+        r = size // 2 - 2
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(255, 220, 50, 230))
+
+    path = os.path.join(tempfile.gettempdir(), 'bloom_marker_progress.png')
+    img.save(path)
+    return path
+
+
+def _load_font(size):
+    """Load Montserrat-Bold at given size, with fallbacks."""
+    from PIL import ImageFont
+    base = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        '..', 'downloads', 'fonts')
+    for fp in [os.path.join(base, 'Montserrat-Bold.ttf'),
+               os.path.join(base, 'RussoOne-Regular.ttf'),
+               r"C:\Windows\Fonts\arialbd.ttf"]:
+        try:
+            return ImageFont.truetype(fp, size)
+        except Exception:
+            continue
+    return ImageFont.load_default()
+
+
+def _create_cta_image(segments, padding_x=40, padding_y=24):
+    """Create styled CTA overlay PNG with per-line color/size.
+
+    Args:
+        segments: list of {text, color, size} dicts  -OR-  plain str (legacy).
+    Returns:
+        (path, width, height)
+    """
+    import tempfile
+    from PIL import Image, ImageDraw
+
+    # Legacy: plain string → white lines at 40px
+    if isinstance(segments, str):
+        segments = [{"text": ln, "color": (255, 255, 255), "size": 40}
+                    for ln in segments.split('\n')]
+
+    line_spacing = 12
+    fonts, widths, heights = [], [], []
+    for seg in segments:
+        f = _load_font(seg.get("size", 40))
+        fonts.append(f)
+        bbox = f.getbbox(seg["text"])
+        widths.append(bbox[2] - bbox[0])
+        heights.append(bbox[3] - bbox[1])
+
+    max_w = max(widths)
+    total_h = sum(heights) + line_spacing * (len(segments) - 1)
+    img_w = max_w + padding_x * 2
+    img_h = total_h + padding_y * 2
+
+    img = Image.new('RGBA', (img_w, img_h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle([0, 0, img_w - 1, img_h - 1],
+                           radius=22, fill=(0, 0, 0, 180))
+
+    y = padding_y
+    for i, seg in enumerate(segments):
+        lw = widths[i]
+        x = (img_w - lw) // 2
+        color = tuple(seg.get("color", (255, 255, 255))) + (255,)
+        draw.text((x, y), seg["text"], fill=color, font=fonts[i])
+        y += heights[i] + line_spacing
+
+    name = f'bloom_cta_{abs(hash(str(segments))) % 100000}.png'
+    path = os.path.join(tempfile.gettempdir(), name)
+    img.save(path)
+    return path, img_w, img_h
+
+
+def render_countdown_video(
+    duration: float = 5.0,
+    output_path: str = None,
+    width: int = 1080,
+    height: int = 1920,
+    fps: int = 30,
+) -> str:
+    """
+    Render a countdown timer video (5.00→0.00) with beep audio.
+
+    Picks one of several visually distinct themes at random:
+      neon_glow, rgb_glitch, minimal, fire, progress_ring, matrix
+    """
+    import tempfile
+    import wave
+    import math
+    import random
+    import numpy as np
+    from PIL import Image, ImageDraw, ImageFont, ImageFilter
+
+    if output_path is None:
+        output_path = os.path.join(tempfile.gettempdir(), 'bloom_countdown.mp4')
+
+    ffmpeg = get_ffmpeg_path()
+    temp_dir = tempfile.mkdtemp(prefix='bloom_cd_')
+    dur = duration
+    total_frames = int(dur * fps)
+
+    # ---- Load a valid font ----
+    fonts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'downloads', 'fonts')
+    font_path = None
+    for f in [os.path.join(fonts_dir, 'Montserrat-Bold.ttf'),
+              os.path.join(fonts_dir, 'BebasNeue-Regular.ttf'),
+              os.path.join(fonts_dir, 'RussoOne-Regular.ttf')]:
+        if os.path.exists(f):
+            try:
+                ImageFont.truetype(f, 40)
+                font_path = f
+                break
+            except Exception:
+                pass
+
+    def _mk_font(sz):
+        if font_path:
+            return ImageFont.truetype(font_path, sz)
+        return _load_font(sz)
+
+    # ---- Pick theme ----
+    THEMES = ['neon_glow', 'rgb_glitch', 'minimal', 'fire', 'progress_ring', 'matrix']
+    theme = random.choice(THEMES)
+
+    # Beep pitch (always randomized)
+    beep_base = random.choice([660, 770, 880, 990, 1100])
+    beep_final = beep_base + random.randint(300, 600)
+
+    print(f"Countdown theme: {theme}, beep={beep_base}Hz")
+
+    # ---- Generate beep audio as WAV ----
+    sample_rate = 44100
+    total_samples = int(dur * sample_rate)
+    audio_data = np.zeros(total_samples, dtype=np.float32)
+    for sec in range(int(dur) + 1):
+        s0 = int(sec * sample_rate)
+        if sec < int(dur):
+            bd, fr, vol = 0.08, beep_base, 0.6
+        else:
+            bd, fr, vol = 0.25, beep_final, 0.8
+        n = int(bd * sample_rate)
+        tt = np.arange(n, dtype=np.float32) / sample_rate
+        beep_sig = np.sin(2 * np.pi * fr * tt) * vol * np.exp(-tt * 10)
+        e = min(s0 + n, total_samples)
+        audio_data[s0:e] = beep_sig[:e - s0]
+
+    wav_path = os.path.join(temp_dir, 'beeps.wav')
+    pcm = (audio_data * 32767).astype(np.int16)
+    with wave.open(wav_path, 'w') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm.tobytes())
+
+    # ---- Helper: lerp color ----
+    def _lerp(a, b, t):
+        return tuple(int(a[i] + (b[i] - a[i]) * max(0, min(1, t))) for i in range(3))
+
+    # =================================================================
+    # THEME DEFINITIONS — each defines render_frame(fi) -> PIL Image
+    # =================================================================
+
+    if theme == 'neon_glow':
+        # Bright neon glow on black, color shifts cyan→magenta→white
+        font_main = _mk_font(200)
+        font_label = _mk_font(34)
+        glow_r = 16
+        pad = glow_r * 3
+        c_phases = [(0, 255, 255), (255, 0, 255), (255, 255, 255)]
+
+        def _color(rem):
+            if rem > dur * 0.5:
+                return c_phases[0]
+            elif rem > dur * 0.15:
+                return _lerp(c_phases[0], c_phases[1], 1.0 - (rem - dur*0.15)/(dur*0.35))
+            else:
+                return _lerp(c_phases[1], c_phases[2], 1.0 - rem/(dur*0.15))
+
+        bg_bytes = b'\x00' * (width * 3) * height
+
+        def render_frame(fi):
+            t = fi / fps
+            rem = max(0.0, dur - t)
+            text = f"{int(rem)}.{int((rem - int(rem)) * 100) % 100:02d}"
+            color = _color(rem)
+            # pulse
+            frac = t - math.floor(t)
+            pulse = 1.0 + 0.15 * max(0, 1 - frac / 0.15) if frac < 0.15 else 1.0
+
+            bbox = font_main.getbbox(text)
+            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            cw, ch = tw + pad*2, th + pad*2 + 60
+
+            canvas = Image.new('RGB', (cw, ch), (0, 0, 0))
+            d = ImageDraw.Draw(canvas)
+            gx, gy = (cw-tw)//2, (ch-60-th)//2 - bbox[1]
+            # Double glow: inner + outer
+            d.text((gx, gy), text, fill=color, font=font_main)
+            canvas = canvas.filter(ImageFilter.GaussianBlur(radius=glow_r))
+            d2 = ImageDraw.Draw(canvas)
+            d2.text((gx, gy), text, fill=color, font=font_main)
+            canvas = canvas.filter(ImageFilter.GaussianBlur(radius=glow_r // 3))
+            d3 = ImageDraw.Draw(canvas)
+            d3.text((gx, gy), text, fill=(255, 255, 255), font=font_main)
+            # label
+            lb = font_label.getbbox("BLOOM")
+            d3.text(((cw - lb[2] + lb[0]) // 2, (ch-60-th)//2 + th + 14),
+                    "BLOOM", fill=(color[0]//2, color[1]//2, color[2]//2), font=font_label)
+
+            if abs(pulse - 1.0) > 0.01:
+                canvas = canvas.resize((int(cw*pulse), int(ch*pulse)), Image.LANCZOS)
+
+            frame = Image.frombytes('RGB', (width, height), bg_bytes)
+            frame.paste(canvas, ((width-canvas.width)//2, (height-canvas.height)//2 - 80))
+
+            if rem < 0.1:
+                a = 1.0 - rem / 0.1
+                frame = Image.blend(frame, Image.new('RGB', (width, height), (255,255,255)), a * 0.8)
+            return frame
+
+    elif theme == 'rgb_glitch':
+        # RGB channel offset glitch — red/green/blue separated
+        font_main = _mk_font(190)
+        font_label = _mk_font(30)
+        bg_bytes = b'\x00' * (width * 3) * height
+
+        def render_frame(fi):
+            t = fi / fps
+            rem = max(0.0, dur - t)
+            text = f"{int(rem)}.{int((rem - int(rem)) * 100) % 100:02d}"
+            # Glitch offset — bigger as time runs out
+            glitch = int(6 + (1 - rem / dur) * 14)
+            jitter = random.randint(-3, 3) if (fi % 3 == 0) else 0
+
+            bbox = font_main.getbbox(text)
+            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            cx, cy = (width - tw) // 2, (height - th) // 2 - 80 - bbox[1]
+
+            frame = Image.new('RGB', (width, height), (0, 0, 0))
+            # Draw each channel offset
+            for ch_idx, (color, dx, dy) in enumerate([
+                ((255, 0, 0), -glitch + jitter, -2),
+                ((0, 255, 0), 0, 0),
+                ((0, 80, 255), glitch - jitter, 2),
+            ]):
+                layer = Image.new('RGB', (width, height), (0, 0, 0))
+                ld = ImageDraw.Draw(layer)
+                ld.text((cx + dx, cy + dy), text, fill=color, font=font_main)
+                frame = Image.composite(
+                    Image.new('RGB', (width, height), (255,255,255)),
+                    frame,
+                    layer.convert('L')
+                ) if ch_idx > 0 else layer
+            # Merge: add channels
+            r_layer = Image.new('RGB', (width, height), (0,0,0))
+            g_layer = Image.new('RGB', (width, height), (0,0,0))
+            b_layer = Image.new('RGB', (width, height), (0,0,0))
+            for layer, color, dx, dy in [
+                (r_layer, (255,0,0), -glitch+jitter, -2),
+                (g_layer, (0,255,0), 0, 0),
+                (b_layer, (0,80,255), glitch-jitter, 2),
+            ]:
+                ImageDraw.Draw(layer).text((cx+dx, cy+dy), text, fill=color, font=font_main)
+
+            r_arr = np.array(r_layer)
+            g_arr = np.array(g_layer)
+            b_arr = np.array(b_layer)
+            merged = np.clip(r_arr.astype(int) + g_arr.astype(int) + b_arr.astype(int), 0, 255).astype(np.uint8)
+            frame = Image.fromarray(merged)
+
+            # Label
+            ld = ImageDraw.Draw(frame)
+            lb = font_label.getbbox("BLOOM")
+            ld.text(((width - lb[2] + lb[0]) // 2, cy + th + bbox[1] + 20),
+                    "BLOOM", fill=(100, 100, 100), font=font_label)
+
+            # Scanline effect — every other row darkened
+            if fi % 2 == 0:
+                arr = np.array(frame)
+                arr[::3, :, :] = (arr[::3, :, :] * 0.7).astype(np.uint8)
+                frame = Image.fromarray(arr)
+
+            if rem < 0.1:
+                a = 1.0 - rem / 0.1
+                frame = Image.blend(frame, Image.new('RGB', (width, height), (255,255,255)), a * 0.8)
+            return frame
+
+    elif theme == 'minimal':
+        # Clean white on dark gray, thin, no glow, big whole seconds
+        font_big = _mk_font(280)
+        font_small = _mk_font(80)
+        font_label = _mk_font(28)
+        bg_color = (18, 18, 22)
+        bg_bytes = bytes(bg_color) * (width * height)
+
+        def render_frame(fi):
+            t = fi / fps
+            rem = max(0.0, dur - t)
+            secs = int(rem)
+            centis = int((rem - secs) * 100) % 100
+
+            frame = Image.frombytes('RGB', (width, height), bg_bytes)
+            d = ImageDraw.Draw(frame)
+
+            # Big second number
+            big_text = str(secs)
+            bb = font_big.getbbox(big_text)
+            bw, bh = bb[2] - bb[0], bb[3] - bb[1]
+            bx = (width - bw) // 2
+            by = height // 2 - bh - 20 - bb[1]
+            # Fade color: white → dim red
+            bright = int(180 + 75 * (rem / dur))
+            txt_color = (bright, bright, bright) if rem > 1.0 else (255, int(80 * rem), int(40 * rem))
+            d.text((bx, by), big_text, fill=txt_color, font=font_big)
+
+            # Small centiseconds
+            small_text = f".{centis:02d}"
+            sb = font_small.getbbox(small_text)
+            sw = sb[2] - sb[0]
+            sx = (width - sw) // 2
+            sy = by + bh + bb[1] + 8
+            d.text((sx, sy), small_text, fill=(120, 120, 120), font=font_small)
+
+            # Thin progress line at bottom
+            line_y = height - 200
+            line_w = int(width * 0.7)
+            line_x = (width - line_w) // 2
+            progress = rem / dur
+            d.rectangle([line_x, line_y, line_x + line_w, line_y + 4], fill=(50, 50, 50))
+            d.rectangle([line_x, line_y, line_x + int(line_w * progress), line_y + 4], fill=txt_color)
+
+            # Label
+            lb = font_label.getbbox("BLOOM")
+            d.text(((width - lb[2] + lb[0]) // 2, line_y + 20),
+                   "BLOOM", fill=(60, 60, 60), font=font_label)
+
+            if rem < 0.1:
+                a = 1.0 - rem / 0.1
+                frame = Image.blend(frame, Image.new('RGB', (width, height), (255,255,255)), a * 0.7)
+            return frame
+
+    elif theme == 'fire':
+        # Orange/red hot countdown, heavy glow, dark red background
+        font_main = _mk_font(200)
+        font_label = _mk_font(34)
+        glow_r = 20
+        pad = glow_r * 3
+        bg_color = (15, 2, 2)
+        bg_bytes = bytes(bg_color) * (width * height)
+
+        def render_frame(fi):
+            t = fi / fps
+            rem = max(0.0, dur - t)
+            text = f"{int(rem)}.{int((rem - int(rem)) * 100) % 100:02d}"
+            # Fire color: orange → bright yellow → white-hot
+            heat = 1.0 - rem / dur
+            color = _lerp((255, 80, 0), (255, 255, 100), heat)
+            # Flicker
+            flicker = random.uniform(0.85, 1.0)
+            color = tuple(int(c * flicker) for c in color)
+            # pulse
+            frac = t - math.floor(t)
+            pulse = 1.0 + 0.12 * max(0, 1 - frac / 0.15) if frac < 0.15 else 1.0
+
+            bbox = font_main.getbbox(text)
+            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            cw, ch = tw + pad*2, th + pad*2 + 60
+
+            canvas = Image.new('RGB', (cw, ch), bg_color)
+            d = ImageDraw.Draw(canvas)
+            gx, gy = (cw-tw)//2, (ch-60-th)//2 - bbox[1]
+            d.text((gx, gy), text, fill=color, font=font_main)
+            canvas = canvas.filter(ImageFilter.GaussianBlur(radius=glow_r))
+            d2 = ImageDraw.Draw(canvas)
+            d2.text((gx, gy), text, fill=(255, 255, min(255, int(200 * heat + 55))), font=font_main)
+            # label
+            lb = font_label.getbbox("BLOOM")
+            d2.text(((cw - lb[2] + lb[0]) // 2, (ch-60-th)//2 + th + 14),
+                    "BLOOM", fill=(color[0]//3, color[1]//3, 0), font=font_label)
+
+            if abs(pulse - 1.0) > 0.01:
+                canvas = canvas.resize((int(cw*pulse), int(ch*pulse)), Image.LANCZOS)
+
+            frame = Image.frombytes('RGB', (width, height), bg_bytes)
+            frame.paste(canvas, ((width-canvas.width)//2, (height-canvas.height)//2 - 80))
+
+            if rem < 0.1:
+                a = 1.0 - rem / 0.1
+                frame = Image.blend(frame, Image.new('RGB', (width, height), (255,200,50)), a * 0.8)
+            return frame
+
+    elif theme == 'progress_ring':
+        # Circular progress ring around the number
+        font_main = _mk_font(160)
+        font_label = _mk_font(30)
+        ring_color = random.choice([(0, 200, 255), (0, 255, 130), (255, 100, 200), (255, 200, 0)])
+        ring_radius = 260
+        ring_width = 14
+        bg_bytes = b'\x00' * (width * 3) * height
+
+        def render_frame(fi):
+            t = fi / fps
+            rem = max(0.0, dur - t)
+            text = f"{int(rem)}.{int((rem - int(rem)) * 100) % 100:02d}"
+            progress = rem / dur
+
+            frame = Image.frombytes('RGB', (width, height), bg_bytes)
+            d = ImageDraw.Draw(frame)
+
+            # Ring arc
+            cx_r, cy_r = width // 2, height // 2 - 80
+            arc_box = [cx_r - ring_radius, cy_r - ring_radius,
+                       cx_r + ring_radius, cy_r + ring_radius]
+            # Background ring (dark)
+            d.arc(arc_box, 0, 360, fill=(40, 40, 40), width=ring_width)
+            # Progress arc (colored) — from top (-90°)
+            sweep = int(360 * progress)
+            if sweep > 0:
+                d.arc(arc_box, -90, -90 + sweep, fill=ring_color, width=ring_width)
+
+            # Dot at end of arc
+            angle_rad = math.radians(-90 + sweep)
+            dot_x = cx_r + int(ring_radius * math.cos(angle_rad))
+            dot_y = cy_r + int(ring_radius * math.sin(angle_rad))
+            d.ellipse([dot_x - 10, dot_y - 10, dot_x + 10, dot_y + 10], fill=ring_color)
+
+            # Text centered
+            bbox = font_main.getbbox(text)
+            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            tx = (width - tw) // 2
+            ty = cy_r - th // 2 - bbox[1]
+            d.text((tx, ty), text, fill=(255, 255, 255), font=font_main)
+
+            # Label below ring
+            lb = font_label.getbbox("BLOOM")
+            d.text(((width - lb[2] + lb[0]) // 2, cy_r + ring_radius + 30),
+                   "BLOOM", fill=(ring_color[0]//2, ring_color[1]//2, ring_color[2]//2),
+                   font=font_label)
+
+            if rem < 0.1:
+                a = 1.0 - rem / 0.1
+                frame = Image.blend(frame, Image.new('RGB', (width, height),
+                                    (ring_color[0], ring_color[1], ring_color[2])), a * 0.5)
+            return frame
+
+    elif theme == 'matrix':
+        # Green "Matrix" rain with countdown
+        font_main = _mk_font(200)
+        font_label = _mk_font(30)
+        font_rain = _mk_font(18)
+        rain_chars = "01アイウエオカキクケコ"
+        # Init rain columns
+        n_cols = width // 20
+        rain_y = [random.randint(-height, 0) for _ in range(n_cols)]
+        rain_speed = [random.randint(8, 25) for _ in range(n_cols)]
+        bg_bytes = b'\x00' * (width * 3) * height
+
+        def render_frame(fi):
+            t = fi / fps
+            rem = max(0.0, dur - t)
+            text = f"{int(rem)}.{int((rem - int(rem)) * 100) % 100:02d}"
+
+            frame = Image.frombytes('RGB', (width, height), bg_bytes)
+            d = ImageDraw.Draw(frame)
+
+            # Rain
+            for col in range(n_cols):
+                rain_y[col] += rain_speed[col]
+                if rain_y[col] > height + 200:
+                    rain_y[col] = random.randint(-400, -20)
+                    rain_speed[col] = random.randint(8, 25)
+                x = col * 20
+                for row in range(12):
+                    ry = rain_y[col] - row * 22
+                    if 0 <= ry < height:
+                        brightness = max(30, 200 - row * 18)
+                        ch_char = random.choice(rain_chars) if random.random() < 0.1 else rain_chars[row % len(rain_chars)]
+                        d.text((x, ry), ch_char, fill=(0, brightness, 0), font=font_rain)
+
+            # Countdown text with glow
+            bbox = font_main.getbbox(text)
+            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            cx_t = (width - tw) // 2
+            cy_t = (height - th) // 2 - 80 - bbox[1]
+            # Dark box behind text for readability
+            margin = 30
+            d.rectangle([cx_t - margin, cy_t + bbox[1] - margin,
+                         cx_t + tw + margin, cy_t + bbox[1] + th + margin],
+                        fill=(0, 10, 0))
+            # Green glow
+            heat = 1.0 - rem / dur
+            green_val = int(180 + 75 * heat)
+            d.text((cx_t, cy_t), text, fill=(0, green_val, 0), font=font_main)
+
+            # Label
+            lb = font_label.getbbox("BLOOM")
+            d.text(((width - lb[2] + lb[0]) // 2, cy_t + th + bbox[1] + 20),
+                   "BLOOM", fill=(0, 80, 0), font=font_label)
+
+            if rem < 0.1:
+                a = 1.0 - rem / 0.1
+                frame = Image.blend(frame, Image.new('RGB', (width, height), (0,255,0)), a * 0.5)
+            return frame
+
+    # =================================================================
+    # RENDER LOOP — pipe frames to ffmpeg
+    # =================================================================
+    cmd = [
+        ffmpeg, '-y',
+        '-f', 'rawvideo', '-pix_fmt', 'rgb24',
+        '-s', f'{width}x{height}', '-r', str(fps),
+        '-i', 'pipe:0',
+        '-i', wav_path,
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-b:a', '192k',
+        '-shortest',
+        output_path,
+    ]
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+
+    for fi in range(total_frames):
+        frame = render_frame(fi)
+        try:
+            proc.stdin.write(frame.tobytes())
+        except BrokenPipeError:
+            break
+
+    proc.stdin.close()
+    _, stderr_data = proc.communicate()
+
+    if proc.returncode != 0:
+        err = stderr_data.decode('utf-8', errors='replace') if stderr_data else 'unknown'
+        if not os.path.exists(output_path) or os.path.getsize(output_path) < 1000:
+            raise RuntimeError(f"Countdown render failed: {err[-500:]}")
+
+    try:
+        os.remove(wav_path)
+        os.rmdir(temp_dir)
+    except OSError:
+        pass
+
+    print(f"Countdown rendered ({theme}): {output_path}")
+    return output_path
+
+
+def _create_glow_cta_image(text, font_size=36, glow_color=(255, 200, 0),
+                           text_color=(255, 255, 255), glow_radius=8, padding=24):
+    """Create text PNG with glowing aura effect."""
+    import tempfile
+    from PIL import Image, ImageDraw, ImageFilter
+
+    font = _load_font(font_size)
+    bbox = font.getbbox(text)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+
+    extra = glow_radius * 3
+    img_w = tw + padding * 2 + extra * 2
+    img_h = th + padding * 2 + extra * 2
+
+    # Glow layer: text in glow color, blurred
+    glow = Image.new('RGBA', (img_w, img_h), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    gx = (img_w - tw) // 2
+    gy = (img_h - th) // 2 - bbox[1]
+    gd.text((gx, gy), text, fill=glow_color + (220,), font=font)
+    glow = glow.filter(ImageFilter.GaussianBlur(radius=glow_radius))
+
+    # Bright core glow (tighter, brighter)
+    core = Image.new('RGBA', (img_w, img_h), (0, 0, 0, 0))
+    cd = ImageDraw.Draw(core)
+    cd.text((gx, gy), text, fill=(255, 255, 200, 180), font=font)
+    core = core.filter(ImageFilter.GaussianBlur(radius=glow_radius // 3))
+
+    # Crisp text on top
+    txt = Image.new('RGBA', (img_w, img_h), (0, 0, 0, 0))
+    td = ImageDraw.Draw(txt)
+    td.text((gx, gy), text, fill=text_color + (255,), font=font)
+
+    result = Image.alpha_composite(glow, core)
+    result = Image.alpha_composite(result, txt)
+
+    path = os.path.join(tempfile.gettempdir(), 'bloom_glow_cta.png')
+    result.save(path)
+    return path, img_w, img_h
+
+
+# Always-visible glow text
+_GLOW_TEXT = "Тебя ждёт бесплатный подарок"
+
+# CTA markers shown at timeline milestones
+_DEFAULT_CTA_MARKERS = [
+    {
+        "position": 0.25,
+        "always": False,
+        "segments": [
+            {"text": "Бесплатный бот",       "color": (0, 230, 160),  "size": 52},
+            {"text": "спасающий отношения",   "color": (255, 255, 255), "size": 44},
+            {"text": "Ссылка в шапке профиля ↑", "color": (255, 215, 0), "size": 40},
+        ],
+    },
+    {
+        "position": 0.50,
+        "always": False,
+        "segments": [
+            {"text": "Подпишись!",            "color": (255, 255, 255), "size": 48},
+        ],
+    },
+]
+
+
+def _create_cat_icon(size=64):
+    """Create a small cat emoji PNG for progress bar indicator."""
+    import tempfile
+    from PIL import Image, ImageDraw, ImageFont
+
+    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    rendered = False
+    for font_path in [r"C:\Windows\Fonts\seguiemj.ttf",
+                      "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"]:
+        try:
+            font = ImageFont.truetype(font_path, int(size * 0.8))
+            bbox = font.getbbox("\U0001F431")
+            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            x = (size - tw) // 2
+            y = (size - th) // 2 - bbox[1]
+            draw.text((x, y), "\U0001F431", font=font, embedded_color=True)
+            rendered = True
+            break
+        except Exception:
+            continue
+
+    if not rendered:
+        # Fallback: simple white cat face
+        cx, cy = size // 2, size // 2 + 2
+        r = size // 3
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(255, 255, 255, 200))
+        ear = r // 2
+        draw.polygon([(cx - r, cy - r + 2), (cx - ear, cy - r - ear), (cx, cy - r + 2)],
+                     fill=(255, 255, 255, 200))
+        draw.polygon([(cx, cy - r + 2), (cx + ear, cy - r - ear), (cx + r, cy - r + 2)],
+                     fill=(255, 255, 255, 200))
+        er = max(1, r // 4)
+        draw.ellipse([cx - r // 2 - er, cy - er, cx - r // 2 + er, cy + er], fill=(0, 0, 0, 200))
+        draw.ellipse([cx + r // 2 - er, cy - er, cx + r // 2 + er, cy + er], fill=(0, 0, 0, 200))
+
+    path = os.path.join(tempfile.gettempdir(), 'bloom_cat_progress.png')
+    img.save(path)
+    return path
+
+
+def post_process_video(
+    video_path: str,
+    output_path: str = None,
+    music_path: str = None,
+    music_volume: float = 0.12,
+    progress_bar: bool = False,
+    progress_bar_color: str = "FFFFFF",
+    progress_bar_height: int = 4,
+    cta_always: bool = True,
+    gpu: str = None,
+    threads: int = 0,
+):
+    """
+    Apply post-processing: background music and/or progress bar.
+    Re-encodes only when needed; copies video stream when only adding music.
+    """
+    ffmpeg = get_ffmpeg_path()
+
+    # Get video duration via ffmpeg -i (works without ffprobe)
+    result = subprocess.run(
+        [ffmpeg, '-i', video_path],
+        capture_output=True, text=True
+    )
+    duration = 0.0
+    for line in result.stderr.split('\n'):
+        if 'Duration:' in line:
+            # Parse "Duration: HH:MM:SS.ms"
+            import re as _re
+            m = _re.search(r'Duration:\s*(\d+):(\d+):(\d+)\.(\d+)', line)
+            if m:
+                h, mi, s, ms = m.groups()
+                duration = int(h) * 3600 + int(mi) * 60 + int(s) + int(ms) / 100
+                break
+    if duration <= 0:
+        raise RuntimeError(f"Could not detect video duration: {video_path}")
+
+    if not output_path:
+        output_path = video_path
+
+    needs_reencode = progress_bar  # Progress bar requires video re-encode
+    temp_output = video_path + '.postproc.mp4'
+
+    # Generate icons and CTA images for progress bar
+    cat_icon_path = None
+    marker_icon_path = None
+    glow_path = None
+    glow_w = glow_h = 0
+    cta_images = []  # list of (path, width, height)
+    temp_files = []  # track all temp files for cleanup
+    cta_markers = None
+
+    if progress_bar:
+        cat_icon_path = _create_cat_icon(size=64)
+        temp_files.append(cat_icon_path)
+        # CTA markers with styled text overlays
+        cta_markers = _DEFAULT_CTA_MARKERS
+        marker_icon_path = _create_marker_icon(size=72)
+        temp_files.append(marker_icon_path)
+        for m in cta_markers:
+            segs = m.get("segments", m.get("text", ""))
+            cta_path, cta_w, cta_h = _create_cta_image(segs)
+            cta_images.append({"path": cta_path, "w": cta_w, "h": cta_h,
+                               "always": m.get("always", False)})
+            temp_files.append(cta_path)
+
+    cmd = [ffmpeg, '-y']
+
+    # Input 0: video
+    cmd.extend(['-i', video_path])
+    next_input = 1
+
+    # Input (optional): music
+    music_idx = None
+    if music_path:
+        cmd.extend(['-i', music_path])
+        music_idx = next_input
+        next_input += 1
+
+    # Input (optional): cat icon
+    cat_idx = None
+    if cat_icon_path:
+        cmd.extend(['-i', cat_icon_path])
+        cat_idx = next_input
+        next_input += 1
+
+    # Input (optional): marker icons — one per CTA marker
+    marker_indices = []
+    if marker_icon_path and cta_markers:
+        for _ in cta_markers:
+            cmd.extend(['-i', marker_icon_path])
+            marker_indices.append(next_input)
+            next_input += 1
+
+    # Input (optional): CTA text images
+    cta_indices = []
+    for cta in cta_images:
+        cmd.extend(['-i', cta["path"]])
+        cta_indices.append(next_input)
+        next_input += 1
+
+    # Build filter_complex
+    fc_parts = []
+    v_out = '0:v'
+    a_out = '0:a'
+
+    # Progress bar: track line + cat + markers + CTA text
+    if progress_bar and cat_idx is not None:
+        # Position: 75% from bottom = 25% from top of video
+        track_h = 4
+        cat_size = 64
+        bar_y = int(1920 * 0.25)  # 480px from top
+        track_y = bar_y + cat_size // 2 - track_h // 2
+        cat_y = bar_y
+
+        # Track line (bg + filled portion)
+        fc_parts.append(
+            f"[0:v]"
+            f"drawbox=x=0:y={track_y}:w=iw:h={track_h}:color=FFFFFF@0.15:t=fill,"
+            f"drawbox=x=0:y={track_y}:w='t/{duration:.3f}*iw':h={track_h}:color=FFFFFF@0.5:t=fill"
+            f"[track]"
+        )
+
+        # Cat spinning + crawling along straight line
+        last_v = 'track'
+        cat_rot_size = 91  # ceil(64 * sqrt(2)) — room for rotation
+        fc_parts.append(
+            f"[{cat_idx}:v]format=rgba,"
+            f"rotate=2*PI*t:fillcolor=black@0:ow={cat_rot_size}:oh={cat_rot_size}"
+            f"[cat_spin]"
+        )
+        cat_center_y = bar_y + cat_size // 2
+        cat_overlay_y = cat_center_y - cat_rot_size // 2
+        fc_parts.append(
+            f"[{last_v}][cat_spin]"
+            f"overlay=x='t/{duration:.3f}*(W-overlay_w)':y={cat_overlay_y}:eof_action=repeat"
+            f"[v_cat]"
+        )
+        last_v = 'v_cat'
+
+        # Marker overlays: ❗ at each CTA position, bobbing up/down
+        for i, (m_idx, marker) in enumerate(zip(marker_indices, cta_markers)):
+            pos = marker["position"]
+            # x: centered on the timeline position
+            mx = f"{pos}*W-overlay_w/2"
+            # y: above the track, bobbing with sin()
+            marker_base_y = bar_y - 80  # above the cat (marker is 72px)
+            my = f"{marker_base_y}+6*sin(5*t)"
+            lbl = f'v_mk{i}'
+            fc_parts.append(
+                f"[{last_v}][{m_idx}:v]"
+                f"overlay=x='{mx}':y='{my}':eof_action=repeat"
+                f"[{lbl}]"
+            )
+            last_v = lbl
+
+        # CTA text overlays — shown temporarily when cat reaches position
+        # CTAs never overlap (different timestamps), so each gets same y area
+        cta_area_y = bar_y - 80 - 16  # above markers area
+        for i, (c_idx, cta, marker) in enumerate(
+                zip(cta_indices, cta_images, cta_markers)):
+            pos = marker["position"]
+            cx = "(W-overlay_w)/2"
+            cy = cta_area_y - 10 - cta["h"]  # right above markers
+            lbl = f'v_ct{i}'
+            t_start = duration * pos
+            t_end = t_start + 4.0
+            fc_parts.append(
+                f"[{last_v}][{c_idx}:v]"
+                f"overlay=x='{cx}':y={cy}"
+                f":enable='between(t,{t_start:.2f},{t_end:.2f})'"
+                f":eof_action=repeat"
+                f"[{lbl}]"
+            )
+            last_v = lbl
+
+        v_out = f'[{last_v}]'
+
+    # Audio: mix voice + music
+    if music_path and music_idx is not None:
+        fc_parts.append(
+            f"[0:a]volume=1.0[voice];"
+            f"[{music_idx}:a]volume={music_volume},aloop=loop=-1:size=2e+09[music];"
+            f"[voice][music]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+        )
+        a_out = '[aout]'
+
+    if not fc_parts:
+        for f in temp_files:
+            if f and os.path.exists(f):
+                os.unlink(f)
+        return video_path  # Nothing to do
+
+    cmd.extend(['-filter_complex', ';'.join(fc_parts)])
+    cmd.extend(['-map', v_out, '-map', a_out])
+
+    # Video codec
+    if needs_reencode:
+        if gpu == 'nvenc':
+            cmd.extend(['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', '23', '-b:v', '0'])
+        elif gpu == 'amd':
+            cmd.extend(['-c:v', 'h264_amf', '-quality', 'balanced'])
+        elif gpu == 'intel':
+            cmd.extend(['-c:v', 'h264_qsv', '-preset', 'medium', '-global_quality', '23'])
+        else:
+            cmd.extend(['-c:v', 'libx264', '-preset', 'fast', '-crf', '23'])
+            if threads > 0:
+                cmd.extend(['-threads', str(threads)])
+        cmd.extend(['-pix_fmt', 'yuv420p'])
+    elif not progress_bar:
+        # No video re-encode needed (only audio filter)
+        cmd.extend(['-c:v', 'copy'])
+
+    # Audio codec
+    cmd.extend(['-c:a', 'aac', '-b:a', '192k'])
+
+    cmd.append(temp_output)
+
+    print(f"Post-processing: music={bool(music_path)}, progress_bar={progress_bar}, cat={bool(cat_icon_path)}")
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+
+    # Clean up temp files
+    for f in temp_files:
+        if f and os.path.exists(f):
+            try:
+                os.unlink(f)
+            except OSError:
+                pass
+
+    if proc.returncode != 0:
+        print(f"Post-process ffmpeg error: {proc.stderr[:500]}")
+        raise RuntimeError(f"Post-processing failed: {proc.stderr[:500]}")
+
+    # Replace original or move to output
+    if os.path.exists(temp_output):
+        if output_path == video_path:
+            os.replace(temp_output, video_path)
+        else:
+            shutil.move(temp_output, output_path)
+        print(f"Post-processed: {output_path}")
+    else:
+        raise RuntimeError("Post-processing produced no output file")
+
+    return output_path
+
+
 def detect_gpu_encoder():
     """Auto-detect available GPU encoder."""
     import subprocess
@@ -2101,6 +3024,16 @@ def main():
                         help="Use hook as first background (subtitles ON hook) instead of prepending")
     parser.add_argument("--hook-intro", action="store_true",
                         help="Hook plays with original audio, then freeze frame with subtitles page 1, then backgrounds")
+    parser.add_argument("--music", dest="music_path", default=None,
+                        help="Path to background music file (mixed at low volume under voiceover)")
+    parser.add_argument("--music-volume", type=float, default=0.12,
+                        help="Music volume relative to voice (default: 0.12 = 12%%)")
+    parser.add_argument("--progress-bar", action="store_true",
+                        help="Add thin progress bar at top of video")
+    parser.add_argument("--cta-always", action="store_true", default=True,
+                        help="Show bio CTA always (default). Use --no-cta-always to show at 25%%")
+    parser.add_argument("--no-cta-always", dest="cta_always", action="store_false",
+                        help="Show bio CTA only when cat reaches 25%%")
     args = parser.parse_args()
 
     # Defaults
@@ -2133,6 +3066,18 @@ def main():
         hook_as_bg=args.hook_as_bg,
         hook_intro=args.hook_intro
     )
+
+    # Post-processing: music + progress bar
+    if args.music_path or args.progress_bar:
+        post_process_video(
+            video_path=args.output,
+            music_path=args.music_path,
+            music_volume=args.music_volume,
+            progress_bar=args.progress_bar,
+            cta_always=args.cta_always,
+            gpu=args.gpu,
+            threads=args.threads,
+        )
 
 
 if __name__ == "__main__":

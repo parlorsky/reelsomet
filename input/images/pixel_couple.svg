@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512" shape-rendering="crispEdges">
+  <defs>
+    <style>
+      .skin { fill: #FFDBB4; }
+      .hair-m { fill: #4A3728; }
+      .hair-f { fill: #8B5E3C; }
+      .shirt-m { fill: #5B8FB9; }
+      .dress-f { fill: #E88D9D; }
+      .eye { fill: #2C2C2C; }
+      .blush { fill: #FF9999; opacity: 0.5; }
+      .heart { fill: #FF4D6D; }
+      .pants { fill: #3D5A80; }
+      .shoe { fill: #2C2C2C; }
+    </style>
+  </defs>
+
+  <!-- Background: transparent -->
+
+  <!-- ===== LEFT: BOY ===== -->
+  <!-- Hair -->
+  <rect class="hair-m" x="10" y="14" width="12" height="2"/>
+  <rect class="hair-m" x="9"  y="16" width="2"  height="6"/>
+  <rect class="hair-m" x="11" y="16" width="10" height="2"/>
+  <rect class="hair-m" x="21" y="16" width="2"  height="4"/>
+
+  <!-- Face -->
+  <rect class="skin" x="11" y="18" width="10" height="10"/>
+
+  <!-- Eyes -->
+  <rect class="eye" x="13" y="21" width="2" height="2"/>
+  <rect class="eye" x="18" y="21" width="2" height="2"/>
+
+  <!-- Smile -->
+  <rect class="skin" x="14" y="25" width="1" height="1" fill="#D4956B"/>
+  <rect x="15" y="26" width="3" height="1" fill="#D4956B"/>
+  <rect class="skin" x="18" y="25" width="1" height="1" fill="#D4956B"/>
+
+  <!-- Blush -->
+  <rect class="blush" x="12" y="24" width="2" height="1"/>
+  <rect class="blush" x="19" y="24" width="2" height="1"/>
+
+  <!-- Neck -->
+  <rect class="skin" x="14" y="28" width="4" height="2"/>
+
+  <!-- Shirt -->
+  <rect class="shirt-m" x="8"  y="30" width="16" height="12"/>
+  <rect class="shirt-m" x="6"  y="30" width="2"  height="8"/>
+  <rect class="shirt-m" x="24" y="30" width="2"  height="8"/>
+
+  <!-- Arms -->
+  <rect class="skin" x="6"  y="38" width="2" height="2"/>
+  <rect class="skin" x="24" y="30" width="2" height="2"/>
+
+  <!-- Hand reaching to girl -->
+  <rect class="skin" x="25" y="30" width="2" height="2"/>
+  <rect class="skin" x="27" y="30" width="2" height="2"/>
+
+  <!-- Pants -->
+  <rect class="pants" x="8"  y="42" width="7"  height="10"/>
+  <rect class="pants" x="17" y="42" width="7"  height="10"/>
+
+  <!-- Shoes -->
+  <rect class="shoe" x="7"  y="52" width="8" height="2"/>
+  <rect class="shoe" x="17" y="52" width="8" height="2"/>
+
+
+  <!-- ===== RIGHT: GIRL ===== -->
+  <!-- Hair -->
+  <rect class="hair-f" x="38" y="12" width="14" height="2"/>
+  <rect class="hair-f" x="37" y="14" width="2"  height="18"/>
+  <rect class="hair-f" x="40" y="14" width="12" height="2"/>
+  <rect class="hair-f" x="52" y="14" width="2"  height="16"/>
+
+  <!-- Face -->
+  <rect class="skin" x="39" y="16" width="12" height="12"/>
+
+  <!-- Eyes (slightly larger, cute) -->
+  <rect class="eye" x="41" y="20" width="2" height="3"/>
+  <rect class="eye" x="47" y="20" width="2" height="3"/>
+  <!-- Eye shine -->
+  <rect x="42" y="20" width="1" height="1" fill="#fff"/>
+  <rect x="48" y="20" width="1" height="1" fill="#fff"/>
+
+  <!-- Smile -->
+  <rect x="43" y="25" width="4" height="1" fill="#D4956B"/>
+  <rect x="42" y="24" width="1" height="1" fill="#D4956B"/>
+  <rect x="47" y="24" width="1" height="1" fill="#D4956B"/>
+
+  <!-- Blush -->
+  <rect class="blush" x="39" y="23" width="3" height="2"/>
+  <rect class="blush" x="48" y="23" width="3" height="2"/>
+
+  <!-- Neck -->
+  <rect class="skin" x="43" y="28" width="4" height="2"/>
+
+  <!-- Dress -->
+  <rect class="dress-f" x="36" y="30" width="18" height="8"/>
+  <rect class="dress-f" x="34" y="30" width="2"  height="6"/>
+  <rect class="dress-f" x="54" y="30" width="2"  height="6"/>
+  <!-- Dress skirt (flared) -->
+  <rect class="dress-f" x="34" y="38" width="22" height="4"/>
+  <rect class="dress-f" x="35" y="42" width="20" height="3"/>
+  <rect class="dress-f" x="36" y="45" width="18" height="2"/>
+
+  <!-- Arms -->
+  <rect class="skin" x="34" y="30" width="2" height="2"/>
+  <rect class="skin" x="54" y="36" width="2" height="2"/>
+
+  <!-- Hand reaching to boy -->
+  <rect class="skin" x="32" y="30" width="2" height="2"/>
+  <rect class="skin" x="30" y="30" width="2" height="2"/>
+
+  <!-- Legs -->
+  <rect class="skin" x="39" y="47" width="4" height="5"/>
+  <rect class="skin" x="47" y="47" width="4" height="5"/>
+
+  <!-- Shoes -->
+  <rect class="shoe" x="38" y="52" width="6" height="2"/>
+  <rect class="shoe" x="46" y="52" width="6" height="2"/>
+
+
+  <!-- ===== HEART between them ===== -->
+  <rect class="heart" x="28" y="22" width="2" height="2"/>
+  <rect class="heart" x="32" y="22" width="2" height="2"/>
+  <rect class="heart" x="27" y="24" width="8" height="2"/>
+  <rect class="heart" x="28" y="26" width="6" height="2"/>
+  <rect class="heart" x="29" y="28" width="4" height="2"/>
+  <rect class="heart" x="30" y="30" width="2" height="1"/>
+
+  <!-- Small floating hearts -->
+  <rect class="heart" x="24" y="10" width="1" height="1" opacity="0.6"/>
+  <rect class="heart" x="25" y="9"  width="1" height="1" opacity="0.6"/>
+  <rect class="heart" x="24" y="11" width="2" height="1" opacity="0.6"/>
+  <rect class="heart" x="25" y="12" width="1" height="1" opacity="0.6"/>
+
+  <rect class="heart" x="36" y="7"  width="1" height="1" opacity="0.4"/>
+  <rect class="heart" x="37" y="6"  width="1" height="1" opacity="0.4"/>
+  <rect class="heart" x="36" y="8"  width="2" height="1" opacity="0.4"/>
+  <rect class="heart" x="37" y="9"  width="1" height="1" opacity="0.4"/>
+</svg>

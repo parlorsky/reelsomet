@@ -88,6 +88,8 @@ downloads/backgrounds/preview_*/
 nul
 
 # Data files
+data/dag_log.json
+data/test_*.json
 data.csv
 profiles/
 archive/

@@ -14,6 +14,48 @@
       "usable_segment": {"start": 0, "end": 5.0, "note": "только хук с парой"},
       "freeze_frame_time": 3.0,
       "tags": ["couple", "girl", "boy", "sad", "purple", "relationship", "10/10", "meme", "penguin"]
+    },
+    {
+      "id": "johnny_sins_kid",
+      "filename": "johnny_sins_kid.mp4",
+      "duration": 3.0,
+      "resolution": "720x1280",
+      "hook_text": "показывает маленькому мальчику Джонни Синса — и микрочел смеётся",
+      "hook_duration": 3.0,
+      "mood": ["funny", "meme", "innocent", "unexpected"],
+      "suitable_for": ["humor", "innocence", "unexpected_reactions", "internet_culture", "relationships"],
+      "has_builtin_subtitles": false,
+      "usable_segment": {"start": 0, "end": 3.0, "note": "полное видео — уличное интервью, парень в очках показывает фото на телефоне мальчику"},
+      "freeze_frame_time": 3.0,
+      "tags": ["street_interview", "kid", "boy", "phone", "laughing", "meme", "blonde_guy", "glasses", "outdoor"]
+    },
+    {
+      "id": "pugacheva_advice",
+      "filename": "pugacheva_advice.mp4",
+      "duration": 3.73,
+      "resolution": "720x1280",
+      "hook_text": "совет для молодёжи от Аллы Борисовны Пугачёвой",
+      "hook_duration": 3.73,
+      "mood": ["wise", "authoritative", "warm", "nostalgic"],
+      "suitable_for": ["life_advice", "wisdom", "relationships", "generations", "self_improvement"],
+      "has_builtin_subtitles": true,
+      "usable_segment": {"start": 0, "end": 3.73, "note": "полное видео — уличное интервью с Пугачёвой, встроенные субтитры ADVICE YOU WOULD GIVE TO YOUNG"},
+      "freeze_frame_time": 3.0,
+      "tags": ["pugacheva", "celebrity", "interview", "street", "evening", "advice", "wisdom", "older_woman", "blonde_guy"]
+    },
+    {
+      "id": "christmas_girl",
+      "filename": "christmas_girl.mp4",
+      "duration": 3.27,
+      "resolution": "720x1280",
+      "hook_text": "лучшая подруга твоего парня на НГ: Merry Christmas, can you чпокни me right now",
+      "hook_duration": 3.27,
+      "mood": ["provocative", "jealousy", "flirty", "meme"],
+      "suitable_for": ["jealousy", "boundaries", "trust", "relationships", "girlfriend_boyfriend", "loyalty"],
+      "has_builtin_subtitles": true,
+      "usable_segment": {"start": 0, "end": 3.27, "note": "полное видео — девушка в чёрном платье и шапке Санты сидит у ёлки, встроенные субтитры"},
+      "freeze_frame_time": 3.0,
+      "tags": ["girl", "christmas", "santa_hat", "black_dress", "christmas_tree", "provocative", "jealousy", "gift", "new_year"]
     }
   ]
 }

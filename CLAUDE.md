@@ -18,6 +18,7 @@ reelsomet/
 │   ├── styled_subtitles.py      # Main subtitle generator
 │   ├── kie_tts.py               # TTS via KIE.ai
 │   ├── audio_to_word_timestamps.py  # Whisper timestamps
+│   ├── content_audit.py          # Pre-render content validator
 │   ├── background_catalog.py    # Background video cataloger
 │   ├── video_analyzer.py        # Frame extraction
 │   ├── download_from_html.py    # Instagram downloader
@@ -114,13 +115,21 @@ Image locations (checked in order):
 1. `input/images/filename.jpg`
 2. Absolute path
 
-### kie_tts.py - TTS Generation
+### kie_tts.py - TTS Generation (ElevenLabs Turbo 2.5 via KIE.ai)
 ```bash
+python scripts/kie_tts.py "Text" -o voice.mp3
 python scripts/kie_tts.py "Text" -v Callum -o voice.mp3
+python scripts/kie_tts.py "Text" -v EiNlNiXeDU1pqqOPrYMO -o voice.mp3  # voice ID
 python scripts/kie_tts.py --voices  # list voices
 ```
 
-**Voices:** Adam, Alice, Bill, Brian, Callum, Charlie, Chris, Daniel, Eric, George, Harry, Jessica, Laura, Liam, Lily, Matilda, River, Roger, Sarah, Will
+**Default voice:** `EiNlNiXeDU1pqqOPrYMO` (используется всегда если не указан другой)
+
+**Voice presets:** Callum, Rachel, Aria, Roger, Sarah, Laura, Charlie, George, River, Liam, Charlotte, Alice, Matilda, Will, Jessica, Eric, Chris, Brian, Daniel, Lily, Bill
+
+**Can also pass raw ElevenLabs voice IDs** with `-v`
+
+**Params:** `--stability 0.5` `--similarity 0.75` `--style 0` `--speed 1.0` `-l ru`
 
 **Emotion tags:** `[whispers]` `[shouts]` `[sad]` `[happy]` `[sarcastic]` `[pause]` `[laughs]` `[sighs]`
 
@@ -171,136 +180,139 @@ python scripts/styled_subtitles.py script.txt audio.mp3 --bg background.mp4 -o o
 
 ## Форматы видео Bloom
 
-Есть два формата: **Book** (цитата из книги + хук-видео) и **Story** (сторителлинг без хук-видео).
+6 форматов. Жёсткий лимит: **max 8 страниц / 30 секунд** для всех.
 
-### Format: Book (с хук-видео)
+### Format: Micro (7-15 сек, 3-4 стр)
+Один факт/инсайт + эмоция. Максимальный вирусный потенциал.
+- 3-4 страницы МАКСИМУМ
+- Хук = шокирующая цифра или вопрос
+- Payoff к 7-й секунде
+- CTA = share trigger ("отправь партнёру")
 
-Формула: хук-видео → цитата из книги → решение → CTA
+### Format: Challenge (15-20 сек, 5-6 стр)
+Конкретное задание + "попробуй сегодня". Actionable, saveable.
+- Хук = прямая команда или вопрос
+- Задание должно быть КОНКРЕТНЫМ и выполнимым сегодня вечером
+- CTA = "попробуй сегодня вечером" / "сохрани"
 
+### Format: Contrast (15-25 сек, 5-7 стр)
+До/После БЕЗ книги и авторитета. Чистая эмоциональная история.
+- Начинается с РЕЗУЛЬТАТА ("после")
+- Затем флешбэк к "до"
+- Без книг, без авторов, без Bloom (engagement-only)
+
+### Format: Debate (15-25 сек, 5-7 стр)
+Провокация + "а ты как думаешь?" Генерирует комментарии.
+- Поляризующий вопрос как хук
+- Две стороны представлены
+- Ответ НЕ дан — зритель решает сам
+- CTA = "напиши в комменты"
+
+### Format: Book (20-30 сек, 6-8 стр)
+Цитата из книги + хук-видео. **MAX 8 страниц.**
+- Хук-видео из `input/hooks/`
+- Интро подхватывает смысл хука (НЕ имя автора!)
+- Автор + книга + цитата + применение + CTA
+- `[img:book_cover.jpg]` — обложка обязательна
+
+### Format: Story (20-30 сек, 6-8 стр)
+Сторителлинг без хук-видео. **MAX 8 страниц.**
+- Начинается с КУЛЬМИНАЦИИ (не экспозиция, не контекст)
+- Open loop → боль → поворот → развязка + CTA
+
+---
+
+## Жёсткие правила контента
+
+### Лимиты
+| Правило | Лимит |
+|---------|-------|
+| Max страниц | **8** (Micro: 4) |
+| Max длительность | **30 секунд** (Micro: 15 сек) |
+| Мат | **АБСОЛЮТНЫЙ ЗАПРЕТ** |
+| Упоминания Bloom | **Max 1** на скрипт (или 0) |
+| Слово "Телеграм" | **НИКОГДА** (Instagram штрафует) |
+
+### CTA: 80/20 правило
+
+**80% видео — engagement CTA (без Bloom):**
+Цель: DM shares, saves, comments — топ-сигналы алгоритма.
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  1. HOOK VIDEO (3-5 сек)                                    │
-│     Готовое видео из input/hooks/                           │
-│     Содержит hook_text — цепляющую фразу                    │
-│     Пример: "она 10/10, но в детстве к ней никто..."        │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│  2. INTRO (связка с хуком)                                  │
-│     Формула: _«До_ _пизды_ _что_ {тема хука}                │
-│              **Давайте** лучше **разберёмся»**              │
-│                                                             │
-│     Intro должен подхватывать смысл hook_text               │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│  3. ОСНОВНОЙ СЮЖЕТ                                          │
-│                                                             │
-│     a) Автор + книга (с картинкой обложки):                 │
-│        [img:book_cover.jpg]                                 │
-│        [c:cyan]Автор[/] в книге                             │
-│        *«Название»* пишет:                                  │
-│                                                             │
-│     b) Цитата (золотой цвет):                               │
-│        [c:gold]«Текст цитаты»[/]                            │
-│                                                             │
-│     c) Развитие мысли:                                      │
-│        Применение к ситуации из хука                        │
-│        Проблема → последствия                               │
-│                                                             │
-│     d) Решение:                                             │
-│        Что делать? → микро-жесты                            │
-│        Примеры фраз [c:lime]«Я тебя вижу»[/]                │
-│                                                             │
-│     e) CTA (Bloom):                                         │
-│        В [c:green]Bloom[/] мы собрали...                    │
-│        [c:cyan]Ссылка[/] в шапке профиля                    │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Обязательно для Book:**
-- Найти и скачать картинку (обложку книги) в `input/images/`
-- Проверить картинку визуально перед использованием
-- hook_id в сценарии должен соответствовать id из `input/hooks/catalog.json`
-
-### Format: Story (сторителлинг без хук-видео)
-
-Формула: текстовый хук → эмоциональная история → Bloom → CTA
-
-**Без отдельного хук-видео.** Весь ролик — фоны + субтитры + озвучка. Хук — текст на первой странице.
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  BACKGROUND VIDEO (ротация из каталога)                     │
-│                                                             │
-│  Page 1: HOOK (2-3 сек)                                     │
-│     Цепляющая фраза — одна из 5 формул хуков               │
-│     Должна ОСТАНОВИТЬ скролл                               │
-│                                                             │
-│  Pages 2-3: SETUP (5-8 сек)                                 │
-│     Ситуация, знакомая каждому                             │
-│     Погружение в контекст                                  │
-│                                                             │
-│  Pages 4-7: STORY (15-25 сек)                               │
-│     Эмоциональная история                                  │
-│     Детали, которые делают её живой                        │
-│     Повороты, нарастание эмоций                            │
-│     Каждый зритель должен узнать себя                      │
-│                                                             │
-│  Pages 8-9: TWIST / INSIGHT (5-8 сек)                       │
-│     Поворот или инсайт                                     │
-│     Что изменилось / что поняли                            │
-│                                                             │
-│  Pages 10-11: BLOOM (5-8 сек)                               │
-│     Естественная интеграция приложения                      │
-│     НЕ рекламный блок — часть истории                      │
-│                                                             │
-│  Page 12: CTA (2-3 сек)                                     │
-│     Призыв к действию                                      │
-│                                                             │
-│  Итого: 40-55 секунд                                       │
-└─────────────────────────────────────────────────────────────┘
+Отправь партнёру — проверь реакцию
+Сохрани — пригодится вечером
+А ты? Напиши в комменты
 ```
 
-**5 формул хуков:**
+**20% видео — Bloom CTA (нативно, без "Телеграм"):**
+```
+Я нашла это в Bloom — бесплатно — ссылка ↑
+```
 
-| # | Тип | Механизм | Пример (Bloom) |
-|---|-----|----------|----------------|
-| 1 | **Выебоны** (триггер статуса) | Показываешь результат → зритель хочет так же | «Мой парень делает мне сюрприз **каждый** день. Без повода.» |
-| 2 | **Волшебная таблетка** | Простое действие → мощный результат | «**Одна** привычка спасла наши отношения от развода» |
-| 3 | **Запретный плод** | "Скрытая правда", которую как будто не должны говорить | «Психологи не говорят об этом, но **80%** пар делают одну ошибку» |
-| 4 | **Контраст / До-После** | Разница, которая вдохновляет | «Год назад мы не разговаривали. Сейчас — не можем **замолчать**» |
-| 5 | **Страхи / FOMO** | Что человек упустит, если не включится | «Если ты не делаешь это каждый день — твои отношения **умирают**» |
+**НИКОГДА:** "Телеграм", "скачай приложение", "ссылка в шапке профиля"
 
-**Принципы Story:**
-- История должна ГЛУБОКО отзываться у каждого зрителя
-- Конкретные детали (имена, ситуации, диалоги) делают историю живой
-- Bloom вплетается в историю как естественное решение, НЕ как реклама
-- Эмоциональный вектор: грустно / трогательно / захватывающе → инсайт → надежда
-- Картинки (`[img:]`) опциональны — только если усиливают историю
+### Иерархия сигналов Instagram
+```
+DM Shares (3-5x вес) > Saves (1.7x) > Comments > Shares > Likes (1x)
+```
+
+### Правила хука (первые 3 секунды)
+Page 1 ОБЯЗАН содержать один из приёмов:
+- **Незаконченная мысль:** "Когда он сказал ЭТО — я..."
+- **Шокирующая цифра:** "4 из 5 пар делают это неправильно"
+- **Прямой вопрос:** "Твой партнёр делает это?"
+- **Контраст:** "Вчера — чужие. Сегодня — он плачет"
+
+**ЗАПРЕЩЕНО на Page 1:** экспозиция, имя автора, "привет сегодня расскажу", "представь ситуацию"
+
+### Разнообразие тем (антиповтор)
+**Забаненные темы** (если нет свежего угла):
+- "Одиночество вдвоём", "Телефон убивает близость", "Языки любви", "Один жест в день"
+
+**Обязательная ротация кластеров:**
+Конфликты, Физическая близость, Деньги в паре, Родители партнёра, Дети и пара, Личные границы, Ревность и доверие, Юмор и быт, Самооценка, Кризисы отношений, Расставание, Первые отношения
+
+**ЗАПРЕТ:** никакого мата и вульгарных выражений в скриптах (без исключений)
 
 ## Workflow: Scripts & Video Production
 
 ### Scripts Catalog Structure
 
-Поле `format` определяет тип видео: `"book"` или `"story"`.
+Поле `format` определяет тип видео: `"micro"`, `"challenge"`, `"contrast"`, `"debate"`, `"book"` или `"story"`.
 
 **scripts_catalog_draft.json** — черновики и идеи:
 ```json
+// Format: Micro / Challenge / Contrast / Debate (короткие форматы)
+{
+  "id": 400,
+  "format": "micro",          // micro | challenge | contrast | debate
+  "status": "idea",           // idea → draft → ready
+  "title": "Название",
+  "hook_type": "shock",       // одна из 8 формул хука
+  "concept": "Краткое описание идеи",
+  "script_text": null,        // Полный текст с markup
+  "duration_target": 15,      // micro: 15, challenge: 20, contrast/debate: 25
+  "voice": "EiNlNiXeDU1pqqOPrYMO",
+  "mood": "inspiring",
+  "topic_cluster": "conflicts", // кластер темы для антиповтора
+  "tags": ["тег1", "тег2"],
+  "image": null
+}
+
 // Format: Book (с хук-видео)
 {
   "id": 11,
   "format": "book",
-  "status": "idea",           // idea → draft → ready
+  "status": "idea",
   "title": "Название",
   "hook_id": "bloom_sad_girl", // ID хука из input/hooks/catalog.json
   "source": "Автор — Книга",
   "image": "book_cover.jpg",  // Обложка книги в input/images/
   "concept": "Краткое описание идеи",
-  "script_text": null,        // Полный текст с markup (заполняется при status=draft)
-  "duration_target": 50,
-  "voice": "Callum",
+  "script_text": null,
+  "duration_target": 25,      // max 30 сек
+  "voice": "EiNlNiXeDU1pqqOPrYMO",
   "mood": "inspiring",
+  "topic_cluster": "self_esteem",
   "tags": ["тег1", "тег2"]
 }
 
@@ -308,25 +320,29 @@ python scripts/styled_subtitles.py script.txt audio.mp3 --bg background.mp4 -o o
 {
   "id": 16,
   "format": "story",
-  "status": "idea",           // idea → draft → ready
+  "status": "idea",
   "title": "Название",
-  "hook_type": "status_trigger", // status_trigger | magic_pill | forbidden_fruit | contrast | fomo
+  "hook_type": "shock",
   "concept": "Краткое описание истории",
-  "script_text": null,        // Полный текст с markup
-  "duration_target": 50,
-  "voice": "Callum",
+  "script_text": null,
+  "duration_target": 25,      // max 30 сек
+  "voice": "EiNlNiXeDU1pqqOPrYMO",
   "mood": "emotional",
+  "topic_cluster": "jealousy",
   "tags": ["тег1", "тег2"],
-  "image": null               // Опционально — картинка если нужна
+  "image": null
 }
 ```
 
-**hook_type для Story:**
-- `status_trigger` — выебоны, триггер статуса
-- `magic_pill` — волшебная таблетка, простое действие → результат
-- `forbidden_fruit` — запретный плод, скрытая правда
-- `contrast` — контраст до/после
-- `fomo` — страхи, FOMO
+**hook_type для Story (8 формул):**
+- `shock` — шок/провокация: "97% пар делают это неправильно"
+- `forbidden_knowledge` — запретное знание: "Психологи не говорят об этом, но..."
+- `curiosity_gap` — интрига: "То, что я узнала, меня шокировало"
+- `result_numbers` — результат с цифрами: "Как мы перестали ссориться за 2 недели"
+- `fomo` — страх потери: "Каждый день без этого — шаг к расставанию"
+- `contrast` — контраст до/после: "Вчера он приготовил завтрак. Полгода назад мы не разговаривали"
+- `status_trigger` — триггер зависти: "Мой парень делает сюрприз каждый день"
+- `confession` — признание/уязвимость: "Я чуть не разрушила наши отношения"
 
 **scripts_catalog.json** — одобренные сценарии для производства:
 ```json
@@ -350,8 +366,8 @@ python scripts/styled_subtitles.py script.txt audio.mp3 --bg background.mp4 -o o
 3. **Одобрить** → перенести в `scripts_catalog.json` (status: approved)
 4. **Производство:**
    ```bash
-   # TTS
-   python scripts/kie_tts.py "plain_text" -v Callum -o downloads/bloom_XX_audio.mp3
+   # TTS (default voice: EiNlNiXeDU1pqqOPrYMO)
+   python scripts/kie_tts.py "plain_text" -o downloads/bloom_XX_audio.mp3
 
    # Timestamps (auto 1.15x speedup)
    python scripts/audio_to_word_timestamps.py downloads/bloom_XX_audio.mp3
@@ -443,25 +459,38 @@ Core: moviepy, pillow, numpy, openai, aiohttp, playwright
 
 **Триггер:** "Сделай N видео для Bloom" или "Создай пак видео"
 
-При создании пака указать формат: `book` или `story` (или микс).
+При создании пака указать формат: `micro`, `challenge`, `contrast`, `debate`, `book`, `story` (или микс).
+
+**Рекомендуемый микс для пака из 5 видео:**
+- 2x Micro (максимальный охват)
+- 1x Challenge (saves)
+- 1x Contrast или Debate (comments/shares)
+- 1x Book или Story (глубина)
+
+### Шаг 0: Аудит контента (NEW)
+```bash
+python scripts/content_audit.py downloads/bloom_XX_markup.txt
+```
+Проверяет: длина, мат, дубли тем, CTA, Bloom mentions.
 
 ### Шаг 1: Написание сценариев
 **Агент:** `reels-scriptwriter`
 
-**Book:** сценарий по формуле цитата из книги
-**Story:** сценарий с эмоциональной историей и хуком из 5 формул
+Каждый скрипт:
+- MAX 8 страниц / 30 секунд (Micro: 4 стр / 15 сек)
+- Хук на Page 1 (не экспозиция!)
+- CTA: 80% engagement ("отправь партнёру"), 20% Bloom (без "Телеграм")
+- Разные тематические кластеры (антиповтор)
 
 **Выход:** N сценариев в `input/scripts_catalog_draft.json` со статусом `ready`
 
 ### Шаг 2: Подготовка картинок
 **Book:** обязательно — найти обложку книги (WebSearch + скачать в `input/images/`)
-**Story:** опционально — только если картинка усиливает историю
+**Остальные форматы:** опционально
 
 ### Шаг 3: TTS озвучка
-**Агент:** `tts-tag-injector` (опционально, для добавления эмоций)
-
 ```bash
-python scripts/kie_tts.py "plain_text" -v Callum -o downloads/bloom_XX_audio.mp3
+python scripts/kie_tts.py "plain_text" -o downloads/bloom_XX_audio.mp3
 ```
 
 ### Шаг 4: Извлечение таймстампов
@@ -472,19 +501,24 @@ python scripts/audio_to_word_timestamps.py downloads/bloom_XX_audio.mp3
 ### Шаг 5: Создание markup файлов
 Из `script_text` создать файлы `downloads/bloom_XX_markup.txt`
 
-### Шаг 6: Рендер видео
+### Шаг 6: Аудит перед рендером
+```bash
+python scripts/content_audit.py downloads/bloom_XX_markup.txt
+```
+
+### Шаг 7: Рендер видео
 ```bash
 # Format: Book (с хук-видео)
 python scripts/styled_subtitles.py \
   downloads/bloom_XX_markup.txt \
   downloads/bloom_XX_audio.mp3 \
   downloads/bloom_XX_timestamps.json \
-  --hook input/hooks/bloom_sad_girl.mp4 \
+  --hook input/hooks/HOOK_ID.mp4 \
   --hook-intro \
   --bg-dir input/backgrounds/ \
   --threads 20 -o output/bloom_XX_final.mp4
 
-# Format: Story (без хук-видео — проще)
+# Все остальные форматы (без хук-видео)
 python scripts/styled_subtitles.py \
   downloads/bloom_XX_markup.txt \
   downloads/bloom_XX_audio.mp3 \
@@ -493,7 +527,7 @@ python scripts/styled_subtitles.py \
   --threads 20 -o output/bloom_XX_final.mp4
 ```
 
-### Шаг 7: Проверка качества
+### Шаг 8: Проверка качества
 **Агент:** `video-qa-inspector` (автоматически после рендера)
 
 ---
@@ -501,25 +535,21 @@ python scripts/styled_subtitles.py \
 ## Быстрые команды для Claude
 
 ```
-# Book формат (как раньше)
-Сделай 5 видео Bloom Book:
-1. Напиши 5 сценариев (разные книги/авторы про отношения)
-2. Скачай обложки книг
-3. Сгенерируй TTS (Callum)
-4. Извлеки таймстампы
-5. Отрендери все видео с хуком bloom_sad_girl
-6. Проверь качество
+# Микс формат (рекомендуемый)
+Сделай 5 видео Bloom микс:
+1. 2x Micro + 1x Challenge + 1x Contrast + 1x Debate
+2. Разные тематические кластеры (антиповтор!)
+3. 80% engagement CTA, 20% Bloom CTA
+4. Max 8 стр / 30 сек каждое
+5. Аудит → TTS → таймстампы → рендер → проверка
 
-# Story формат (новый)
-Сделай 5 видео Bloom Story:
-1. Напиши 5 историй (разные хук-формулы, эмоциональные истории)
-2. Сгенерируй TTS (Callum)
-3. Извлеки таймстампы
-4. Отрендери все видео с фонами
-5. Проверь качество
+# Один формат
+Сделай 5 видео Bloom Micro
+Сделай 3 видео Bloom Challenge
+Сделай 5 видео Bloom Book
 ```
 
-**Результат:** 5 готовых видео в `output/bloom_XX_final.mp4`
+**Результат:** готовые видео в `output/bloom_XX_final.mp4`
 
 ---
 
@@ -537,69 +567,68 @@ python scripts/styled_subtitles.py \
 
 ## Структура готового видео
 
-### Book (с хук-видео)
-
-```
-┌──────────────────────────────────────────┐
-│  HOOK (5 сек)                            │
-│  • Оригинальное видео из input/hooks/    │
-│  • ОРИГИНАЛЬНЫЙ ЗВУК хука                │
-└──────────────────────────────────────────┘
-                    ↓
-┌──────────────────────────────────────────┐
-│  FREEZE FRAME (~6 сек)                   │
-│  • Затемнённый последний кадр хука       │
-│  • Субтитры Page 1 (интро)               │
-│  • TTS озвучка интро                     │
-└──────────────────────────────────────────┘
-                    ↓
-┌──────────────────────────────────────────┐
-│  MAIN CONTENT (~40 сек)                  │
-│  • Backgrounds из каталога (смена по стр)│
-│  • Картинка обложки книги (pop/slide)    │
-│  • Субтитры Pages 2+                     │
-│  • TTS озвучка остального текста         │
-└──────────────────────────────────────────┘
-
-Итого: ~50-55 секунд
-```
-
-### Story (без хук-видео)
+### Micro / Challenge / Contrast / Debate (без хук-видео)
 
 ```
 ┌──────────────────────────────────────────┐
 │  BACKGROUNDS (ротация по страницам)      │
 │                                          │
-│  Page 1: HOOK — цепляющая фраза (2-3с)  │
-│  Pages 2-3: SETUP — ситуация (5-8с)     │
-│  Pages 4-7: STORY — история (15-25с)    │
-│  Pages 8-9: TWIST — инсайт (5-8с)       │
-│  Pages 10-11: BLOOM — интеграция (5-8с) │
-│  Page 12: CTA — призыв (2-3с)           │
-│                                          │
-│  • TTS озвучка всего текста              │
+│  3-8 страниц, 7-30 секунд               │
+│  • TTS озвучка                           │
 │  • Субтитры на всех страницах            │
-│  • [img:] опционально                    │
+│  • CTA: engagement (shares/saves)        │
+└──────────────────────────────────────────┘
+```
+
+### Book (с хук-видео, max 30 сек основного контента)
+
+```
+┌──────────────────────────────────────────┐
+│  HOOK (3-5 сек)                          │
+│  • Оригинальное видео из input/hooks/    │
+│  • ОРИГИНАЛЬНЫЙ ЗВУК хука                │
+└──────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────┐
+│  MAIN CONTENT (max 25 сек)               │
+│  • 6-8 страниц                           │
+│  • Картинка обложки книги                │
+│  • Субтитры + TTS                        │
 └──────────────────────────────────────────┘
 
-Итого: 40-55 секунд
+Итого: max ~30 секунд
+```
+
+### Story (без хук-видео, max 30 сек)
+
+```
+┌──────────────────────────────────────────┐
+│  BACKGROUNDS (ротация по страницам)      │
+│                                          │
+│  6-8 страниц, 20-30 секунд              │
+│  • Хук-кульминация на Page 1             │
+│  • TTS озвучка + субтитры                │
+│  • [img:] опционально                    │
+└──────────────────────────────────────────┘
 ```
 
 ---
 
 ## Checklist перед рендером
 
-### Book
+### Все форматы
+- [ ] `python scripts/content_audit.py` — пройден без ошибок
+- [ ] Max 8 страниц (Micro: 4)
+- [ ] Нет мата
+- [ ] Нет слова "Телеграм"
+- [ ] Bloom упоминается max 1 раз
+- [ ] CTA содержит share/save trigger
+- [ ] Тема не повторяет предыдущие 20 скриптов
+- [ ] Backgrounds в `input/backgrounds/catalog.json`
+- [ ] TTS аудио в `downloads/`
+- [ ] Timestamps JSON в `downloads/`
+
+### Дополнительно для Book
 - [ ] Хук существует в `input/hooks/`
 - [ ] Картинка обложки в `input/images/`
-- [ ] Backgrounds в `input/backgrounds/catalog.json`
-- [ ] TTS аудио в `downloads/`
-- [ ] Timestamps JSON в `downloads/`
-- [ ] Markup файл с интро и [img:] тегом
-
-### Story
-- [ ] Backgrounds в `input/backgrounds/catalog.json`
-- [ ] TTS аудио в `downloads/`
-- [ ] Timestamps JSON в `downloads/`
-- [ ] Markup файл с хуком на первой странице
-- [ ] (опционально) Картинка в `input/images/`
+- [ ] Markup файл с [img:] тегом

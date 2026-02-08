@@ -46,7 +46,7 @@ async def chat(prompt: str, scope: str = "general", timeout: float = 180) -> str
         resp.raise_for_status()
         data = resp.json()
         # Try common response keys
-        for key in ("response", "message", "text", "content", "reply"):
+        for key in ("result", "response", "message", "text", "content", "reply"):
             if key in data:
                 return data[key]
         # Fallback: return full JSON as string
@@ -80,8 +80,9 @@ def parse_json_response(text: str) -> dict | list:
 
     Handles:
     - Clean JSON
-    - ```json ... ``` fences
+    - ```json ... ``` fences (even unclosed)
     - Text before/after JSON
+    - Truncated JSON (attempts repair)
     """
     text = text.strip()
 
@@ -91,9 +92,19 @@ def parse_json_response(text: str) -> dict | list:
     except json.JSONDecodeError:
         pass
 
-    # Strip markdown code fences
-    if "```" in text:
-        # Find content between first ``` and last ```
+    # Strip markdown code fences (handles unclosed fences too)
+    if text.startswith("```"):
+        first_nl = text.find('\n')
+        if first_nl != -1:
+            text = text[first_nl + 1:]
+        if text.rstrip().endswith("```"):
+            text = text.rstrip()[:-3].rstrip()
+        text = text.strip()
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+    elif "```" in text:
         match = re.search(r"```(?:json)?\s*\n?(.*?)```", text, re.DOTALL)
         if match:
             try:
@@ -111,6 +122,65 @@ def parse_json_response(text: str) -> dict | list:
             except json.JSONDecodeError:
                 pass
 
+    # Attempt to repair truncated JSON
+    for start_char in ("[", "{"):
+        idx = text.find(start_char)
+        if idx != -1:
+            fragment = text[idx:]
+            repaired = _repair_truncated_json(fragment)
+            if repaired is not None:
+                return repaired
+
     raise json.JSONDecodeError(
         f"Could not extract JSON from LLM response: {text[:200]}...", text, 0
     )
+
+
+def _repair_truncated_json(text: str):
+    """Try to repair truncated JSON by closing open brackets/braces."""
+    # Count unclosed brackets
+    # Walk backwards, trimming to the last complete value
+    # Then close any open brackets/braces
+    for trim in range(min(len(text), 500)):
+        candidate = text if trim == 0 else text[:-(trim)]
+        # Trim to last complete key-value: find last comma or opening bracket
+        candidate = candidate.rstrip()
+        if not candidate:
+            continue
+        # Remove trailing comma
+        if candidate.endswith(','):
+            candidate = candidate[:-1]
+        # Remove incomplete string (trailing unclosed quote)
+        if candidate.count('"') % 2 != 0:
+            last_q = candidate.rfind('"')
+            candidate = candidate[:last_q] + '"'
+        # Count open brackets
+        opens = []
+        in_str = False
+        esc = False
+        for ch in candidate:
+            if esc:
+                esc = False
+                continue
+            if ch == '\\' and in_str:
+                esc = True
+                continue
+            if ch == '"':
+                in_str = not in_str
+                continue
+            if in_str:
+                continue
+            if ch in ('{', '['):
+                opens.append(ch)
+            elif ch in ('}', ']'):
+                if opens:
+                    opens.pop()
+        # Close remaining brackets in reverse
+        closers = {'[': ']', '{': '}'}
+        suffix = ''.join(closers[b] for b in reversed(opens))
+        try:
+            result = json.loads(candidate + suffix)
+            return result
+        except json.JSONDecodeError:
+            continue
+    return None
